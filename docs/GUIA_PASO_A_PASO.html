@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guía paso a paso — HelpDesk Enterprise Copilot v12</title>
+<style>
+  :root {
+    --navy: #0f2537; --blue: #0b3d66; --accent: #1f7ab6; --green: #2e8b57;
+    --light: #f6f8fb; --border: #d8e0ea; --mut: #5b6b7b;
+  }
+  * { box-sizing: border-box; }
+  body { font-family: "Segoe UI", Arial, sans-serif; color: #1c2b36; margin: 0; background: var(--light); line-height: 1.55; }
+  .page { max-width: 900px; margin: 0 auto; background: #fff; padding: 40px 56px; }
+  header.hero { background: linear-gradient(135deg, var(--navy) 0%, var(--blue) 100%); color: #fff; border-radius: 12px; padding: 28px 32px; margin-bottom: 28px; }
+  header.hero h1 { margin: 0 0 6px; font-size: 26px; }
+  header.hero p { margin: 0; opacity: .9; font-size: 14px; }
+  h2 { color: var(--blue); font-size: 20px; border-bottom: 2px solid var(--accent); padding-bottom: 6px; margin-top: 40px; page-break-after: avoid; }
+  h3 { color: var(--navy); font-size: 16px; margin-top: 22px; page-break-after: avoid; }
+  p, li { font-size: 14.5px; }
+  code { background: #eef2f7; border: 1px solid var(--border); padding: 1px 6px; border-radius: 4px; font-family: Consolas, monospace; font-size: 13px; color: #114063; }
+  pre { background: var(--navy); color: #d6e4f0; padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; line-height: 1.5; page-break-inside: avoid; }
+  pre code { background: transparent; border: 0; color: inherit; padding: 0; }
+  table { border-collapse: collapse; width: 100%; font-size: 13.5px; margin: 14px 0; page-break-inside: avoid; }
+  th, td { border: 1px solid var(--border); padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #e8eff6; color: var(--navy); }
+  tr:nth-child(even) td { background: #fbfcfe; }
+  .step { background: #edf4fa; border-left: 4px solid var(--accent); padding: 18px 20px; border-radius: 0 8px 8px 0; margin: 14px 0; page-break-inside: avoid; }
+  .step .badge { display: inline-block; background: var(--accent); color: #fff; font-weight: 700; padding: 2px 10px; border-radius: 12px; font-size: 12px; margin-right: 8px; }
+  blockquote { background: #fff8e6; border-left: 4px solid #e6b800; padding: 10px 14px; margin: 14px 0; border-radius: 0 6px 6px 0; font-size: 13.5px; }
+  .check li { list-style: none; margin: 6px 0; }
+  .check li::before { content: "✔ "; color: var(--green); font-weight: 700; }
+  a { color: var(--accent); }
+  .toc { background: #f3f6fa; border: 1px solid var(--border); padding: 16px 22px; border-radius: 8px; font-size: 14px; }
+  .toc ol { margin: 6px 0 0; padding-left: 20px; }
+  footer { margin-top: 40px; padding-top: 12px; border-top: 1px solid var(--border); color: var(--mut); font-size: 12px; }
+  @media print {
+    body { background: #fff; }
+    .page { padding: 0; box-shadow: none; }
+    .step, blockquote, pre, table { page-break-inside: avoid; }
+    h2 { page-break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="hero">
+  <h1>HelpDesk Enterprise Copilot v12</h1>
+  <p>Guía paso a paso: configuración &rarr; instalación &rarr; producción gratuita &rarr; uso del agente</p>
+</header>
+
+<div class="toc">
+  <strong>Contenido</strong>
+  <ol>
+    <li>Qué es esto</li>
+    <li>Requisitos previos (cuentas gratuitas)</li>
+    <li>Configuración local (instalación)</li>
+    <li>API key de Gemini (gratis)</li>
+    <li>Primer arranque y prueba</li>
+    <li>Despliegue en PRODUCCIÓN gratis</li>
+    <li>Conexión a Microsoft Copilot Studio</li>
+    <li>Uso diario del agente</li>
+    <li>Solución de problemas</li>
+    <li>Checklist final</li>
+  </ol>
+</div>
+
+<h2>1. Qué es esto (en 30 segundos)</h2>
+<p>Un <strong>agente de soporte IT</strong> con:</p>
+<ul>
+  <li><strong>RAG</strong> — responde usando la documentación que le des (recuperación híbrida BM25 + vectores + reranking).</li>
+  <li><strong>Autoaprendizaje</strong> — cada respuesta correcta se guarda en memoria y mejora sus futuras respuestas.</li>
+  <li><strong>Conectores opcionales</strong> — busca en SharePoint/Teams/Outlook (Microsoft 365) y en la web cuando no hay documentación interna.</li>
+  <li><strong>Multihilo</strong> — atiende varias personas a la vez sin saturarse.</li>
+  <li><strong>Tickets + SLA</strong> — clasifica (P1–P4), asigna prioridad y puede escalar a un humano.</li>
+</ul>
+
+<h2>2. Requisitos previos (cuentas gratuitas)</h2>
+<table>
+  <tr><th>#</th><th>Qué</th><th>Para qué</th><th>Dónde</th></tr>
+  <tr><td>1</td><td>Python 3.10+</td><td>Ejecutar el código</td><td>python.org/downloads</td></tr>
+  <tr><td>2</td><td>Git (opcional)</td><td>Subir a GitHub</td><td>git-scm.com</td></tr>
+  <tr><td>3</td><td>Google AI Studio</td><td>API key Gemini (LLM gratis)</td><td>aistudio.google.com/apikey</td></tr>
+  <tr><td>4</td><td>Cuenta GitHub</td><td>Repositorio del código</td><td>github.com</td></tr>
+  <tr><td>5</td><td>Hugging Face</td><td>Backend en producción (Docker gratis)</td><td>huggingface.co</td></tr>
+  <tr><td>6</td><td>Supabase</td><td>Base de datos en la nube (500 MB)</td><td>supabase.com</td></tr>
+</table>
+
+<h2>3. Paso 1 — Descomprimir y preparar el entorno (local)</h2>
+<div class="step"><span class="badge">1</span><b>Descomprime</b> el zip en una carpeta, p. ej. <code>C:\HelpDeskCopilot</code>.</div>
+<div class="step"><span class="badge">2</span><b>Abre una terminal</b> (Windows: menú Inicio → teclea <code>powershell</code> → Enter).</div>
+<div class="step"><span class="badge">3</span><b>Entra en la carpeta</b> del proyecto:</div>
+<pre><code>cd C:\HelpDeskCopilot</code></pre>
+<div class="step"><span class="badge">4</span><b>Ejecuta el instalador automático</b> (crea el entorno virtual, instala dependencias y genera el archivo <code>.env</code> desde <code>.env.example</code>). Tarda 2–5 min:</div>
+<pre><code>python scripts/bootstrap.py</code></pre>
+
+<h2>4. Paso 2 — Obtener la API key de Gemini (gratis)</h2>
+<ol>
+  <li>Entra en <a href="https://aistudio.google.com/apikey">aistudio.google.com/apikey</a>.</li>
+  <li>Pulsa <strong>Create API key</strong> y elige o crea un proyecto.</li>
+  <li>Copia la clave (empieza por <code>AIza...</code>).</li>
+  <li>Abre el archivo <code>.env</code> con el bloc de notas y sustituye:
+    <pre><code>GOOGLE_API_KEY=PASTE_YOUR_AI_STUDIO_KEY_HERE</code></pre>
+    por
+    <pre><code>GOOGLE_API_KEY=AIza...tu_clave_real</code></pre>
+  </li>
+  <li>Guarda y cierra.</li>
+</ol>
+<blockquote>⚠️ Nunca compartas el archivo <code>.env</code>. Es tu secreto.</blockquote>
+
+<h2>5. Paso 3 — Crear el super-admin y arrancar en local</h2>
+<pre><code>python scripts/seed.py        # crea el usuario admin (idempotente)
+python scripts/run_api.py     # arranca la API en http://localhost:8000</code></pre>
+<p>Deja esa terminal abierta. Abre una <strong>segunda terminal</strong> en la misma carpeta:</p>
+<pre><code>python scripts/run_ui.py      # interfaz visual en http://localhost:8501</code></pre>
+<p>Abre el navegador en <strong>http://localhost:8501</strong> e inicia sesión con:</p>
+<table>
+  <tr><th>Campo</th><th>Valor</th></tr>
+  <tr><td>Usuario</td><td><code>admin@helpdesk.ai</code></td></tr>
+  <tr><td>Contraseña</td><td>la que pusiste en <code>ADMIN_PASSWORD</code> del <code>.env</code></td></tr>
+</table>
+<blockquote>Opción sin interfaz: <code>python scripts/run_cli.py</code> abre un chat interactivo en la terminal.</blockquote>
+
+<h2>6. Paso 4 — Comprobar que funciona (prueba)</h2>
+<ol>
+  <li>Inicia sesión en la UI (http://localhost:8501).</li>
+  <li>En <strong>Chat</strong>, escribe: <em>“¿Cómo restablezco una contraseña de Windows?”</em></li>
+  <li>Recibirás una respuesta con <strong>fuentes</strong> al final.</li>
+  <li>En <strong>Self-Training → Teach the agent</strong> guarda un caso:
+    <ul>
+      <li><em>Issue:</em> <code>VPN no conecta en casa</code></li>
+      <li><em>Resolution:</em> <code>Registrar el equipo en AAD y resetear credenciales</code></li>
+    </ul>
+  </li>
+  <li>Pregunta de nuevo por la VPN → ahora usa la <strong>memoria aprendida</strong>.</li>
+</ol>
+<blockquote>Verificación opcional completa: <code>python -m pytest</code></blockquote>
+
+<h2>7. Paso 5 — Ponerlo en PRODUCCIÓN (gratis)</h2>
+
+<h3>7.1 Subir el código a GitHub</h3>
+<pre><code>git init
+git add .
+git commit -m "HelpDesk Enterprise Copilot v12"
+git branch -M main
+git remote add origin https://github.com/TU_USUARIO/helpdesk-copilot.git
+git push -u origin main</code></pre>
+<blockquote>El <code>.gitignore</code> ya excluye <code>.env</code>, <code>data/</code>, <code>logs/</code> y <code>*.db</code>.</blockquote>
+
+<h3>7.2 Crear la base de datos en Supabase</h3>
+<ol>
+  <li>Entra a supabase.com → <strong>New project</strong> (plan Free).</li>
+  <li>Ve a <strong>Project Settings → Database → Connection string → URI</strong>.</li>
+  <li>Copia la URI y cambia <code>?sslmode=require</code> por <code>?ssl=require</code>:
+    <pre><code>postgresql://postgres.PROYECTO:CLAVE@aws-0-region.pooler.supabase.com:6543/postgres?ssl=require</code></pre>
+  </li>
+</ol>
+
+<h3>7.3 Publicar en Hugging Face Spaces</h3>
+<ol>
+  <li>Crea un Space en huggingface.co/new-space: <strong>SDK: Docker</strong>, <strong>Hardware: CPU Basic</strong> (gratis), <strong>Name: <code>helpdesk-copilot</code></strong>.</li>
+  <li>En <strong>Settings → Repository secrets</strong> añade:</li>
+</ol>
+<table>
+  <tr><th>Secret</th><th>Valor</th></tr>
+  <tr><td><code>GOOGLE_API_KEY</code></td><td><code>AIza...</code> (Gemini)</td></tr>
+  <tr><td><code>JWT_SECRET_KEY</code></td><td>32+ caracteres aleatorios</td></tr>
+  <tr><td><code>DATABASE_URL</code></td><td>URI de Supabase (7.2)</td></tr>
+  <tr><td><code>ADMIN_EMAIL</code></td><td><code>admin@helpdesk.ai</code></td></tr>
+  <tr><td><code>ADMIN_PASSWORD</code></td><td>contraseña fuerte</td></tr>
+  <tr><td><code>ENVIRONMENT</code></td><td><code>production</code></td></tr>
+  <tr><td><code>LLM_PROVIDER</code></td><td><code>google_gemini</code></td></tr>
+</table>
+<ol start="3">
+  <li>En <strong>Settings → Connect to GitHub Repo</strong> elige tu repositorio. El Space construye y despliega solo.</li>
+  <li>La API queda en <code>https://&lt;tu-usuario&gt;-helpdesk-copilot.hf.space</code>. Compruébalo añadiendo <code>/api/v1/health</code> en el navegador.</li>
+</ol>
+
+<h2>8. Conexión a Microsoft Copilot Studio (opcional)</h2>
+<ol>
+  <li>En Power Automate / Power Apps: <strong>Data → Custom connectors → New → Import an OpenAPI file</strong>, sube <code>docs/copilot_studio_openapi.json</code>.</li>
+  <li><strong>General</strong>: revisa que el host sea <code>xxx.hf.space</code>.</li>
+  <li><strong>Security</strong>: <strong>API Key</strong> → parámetro <code>Authorization</code>, ubicación <code>Header</code>.</li>
+  <li><strong>Test</strong> con un token obtenido de <code>POST /api/v1/auth/login</code>.</li>
+  <li>En <strong>Copilot Studio</strong>: agente → <strong>Tools → Add a tool → Connector</strong>. Configura <code>message</code> como <em>“Dynamically fill with AI”</em>.</li>
+</ol>
+<blockquote>Guías detalladas en el proyecto: <code>docs/DEPLOY_GOOGLE.md</code> y <code>docs/DEPLOY_COPILOT_STUDIO.md</code>.</blockquote>
+
+<h2>9. Uso diario del agente</h2>
+<table>
+  <tr><th>Qué quieres hacer</th><th>Dónde</th></tr>
+  <tr><td>Preguntar al agente</td><td>Chat (UI) o <code>scripts/run_cli.py</code></td></tr>
+  <tr><td>Enseñarle un caso resuelto</td><td>Self-Training → Teach the agent</td></tr>
+  <tr><td>Añadir un case-study</td><td>Self-Training → Case Study</td></tr>
+  <tr><td>Ver tickets y SLA</td><td>Tickets</td></tr>
+  <tr><td>Consultar memoria aprendida</td><td>Self-Training → Recall</td></tr>
+  <tr><td>Estado de conectores</td><td>Escribe <code>status</code> en el CLI</td></tr>
+  <tr><td>Aprobar ticket escalado</td><td>Responder <code>yes</code>/<code>no</code> cuando el agente lo pida</td></tr>
+</table>
+<p><strong>Cómo alimentar su conocimiento:</strong> (1) automático: cada respuesta resuelta se guarda en memoria; (2) manual: enseña casos reales en Self-Training → Teach the agent.</p>
+
+<h2>10. Solución de problemas frecuentes</h2>
+<table>
+  <tr><th>Síntoma</th><th>Solución</th></tr>
+  <tr><td>Error <code>GOOGLE_API_KEY</code></td><td>La clave debe estar completa (<code>AIza...</code>) en <code>.env</code> o secrets.</td></tr>
+  <tr><td>Error de <code>JWT_SECRET_KEY</code></td><td>En producción debe tener 32+ caracteres.</td></tr>
+  <tr><td><code>Rate limit exceeded (429)</code></td><td>Sube <code>RATE_LIMIT_PER_MINUTE</code> en el entorno.</td></tr>
+  <tr><td>“No encontré información”</td><td>Enséñale casos en Self-Training.</td></tr>
+  <tr><td>Space HF “App not running”</td><td>Revisa los secrets del Space (el Dockerfile arranca en <code>$PORT</code>).</td></tr>
+  <tr><td>Conectores vacíos</td><td><code>CONNECTORS_ENABLED=true</code> + <code>GRAPH_*</code> válidos.</td></tr>
+  <tr><td>OAuth “not configured”</td><td>Faltan las claves <code>GOOGLE_OAUTH_*</code>/<code>MICROSOFT_OAUTH_*</code>.</td></tr>
+</table>
+
+<h2>Checklist final antes de producción</h2>
+<ul class="check">
+  <li><code>GOOGLE_API_KEY</code> real y probada en local.</li>
+  <li><code>.env</code> nunca subido a GitHub (solo <code>.env.example</code>).</li>
+  <li><code>JWT_SECRET_KEY</code> de 32+ caracteres en los secrets del Space.</li>
+  <li><code>DATABASE_URL</code> de Supabase con <code>?ssl=require</code>.</li>
+  <li>Admin probado en local antes de publicar.</li>
+  <li>(Opcional) Conector importado y probado en Copilot Studio.</li>
+</ul>
+
+<footer>
+  HelpDesk Enterprise Copilot v12 — Guía de despliegue y uso. Documentación técnica:
+  <code>docs/DEPLOY_GOOGLE.md</code>, <code>docs/DEPLOY_COPILOT_STUDIO.md</code>, <code>docs/copilot_studio_openapi.json</code>.
+  Para exportar a PDF: Ctrl+P → Destino “Guardar como PDF”.
+</footer>
+
+</div>
+</body>
+</html>

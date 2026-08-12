@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# Env & secrets
+.env
+.env.local
+
+# Data & logs
+data/
+logs/
+*.db
+*.sqlite3
+.vector_store/
+
+# Test & coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Chroma
+chroma/
+*.chroma

@@ -1,0 +1,443 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "HelpDesk Enterprise Copilot API",
+    "description": "Custom connector to the HelpDesk Enterprise Copilot v12 RAG agent. Use POST /auth/login to obtain a JWT access token, then the connector sends it as 'Authorization: Bearer <token>'. Configure the connector authentication as API-Key with parameter name 'Authorization' and location 'Header'.",
+    "version": "12.0.0"
+  },
+  "host": "tu-usuario-helpdesk.hf.space",
+  "basePath": "/api/v1",
+  "schemes": ["https"],
+  "consumes": ["application/json"],
+  "produces": ["application/json"],
+  "securityDefinitions": {
+    "apiKey": {
+      "type": "apiKey",
+      "name": "Authorization",
+      "in": "header"
+    }
+  },
+  "security": [
+    {
+      "apiKey": []
+    }
+  ],
+  "paths": {
+    "/health": {
+      "get": {
+        "summary": "Health check",
+        "description": "Liveness probe. No authentication required.",
+        "operationId": "Health",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "schema": { "type": "object" }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "summary": "Login",
+        "description": "Authenticate with email + password and receive an access/refresh token pair.",
+        "operationId": "AuthLogin",
+        "security": [],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["email", "password"],
+              "properties": {
+                "email": { "type": "string", "format": "email" },
+                "password": { "type": "string", "minLength": 6 }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token pair",
+            "schema": {
+              "type": "object",
+              "required": ["access_token", "refresh_token", "expires_in"],
+              "properties": {
+                "access_token": { "type": "string" },
+                "refresh_token": { "type": "string" },
+                "token_type": { "type": "string", "default": "bearer" },
+                "expires_in": { "type": "integer" }
+              }
+            }
+          },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "summary": "Register",
+        "description": "Create a new standard user account.",
+        "operationId": "AuthRegister",
+        "security": [],
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["email", "password", "username", "full_name"],
+              "properties": {
+                "email": { "type": "string", "format": "email" },
+                "password": { "type": "string", "minLength": 8, "maxLength": 128 },
+                "username": { "type": "string", "minLength": 2, "maxLength": 100 },
+                "full_name": { "type": "string", "minLength": 2, "maxLength": 255 }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Created user",
+            "schema": { "$ref": "#/definitions/UserResponse" }
+          },
+          "422": { "description": "Validation error or email already registered" }
+        }
+      }
+    },
+    "/chat": {
+      "post": {
+        "summary": "Chat with the agent",
+        "description": "Send a user message to the RAG agent. Returns the answer, ticket info and whether human approval is needed. If needs_approval is true, resume with POST /chat/{session_id}/decide.",
+        "operationId": "Chat",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["message"],
+              "properties": {
+                "message": { "type": "string", "default": "" },
+                "session_id": { "type": "integer" },
+                "use_memory": { "type": "boolean", "default": true }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Agent answer",
+            "schema": { "$ref": "#/definitions/ChatResponse" }
+          },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/chat/{session_id}/decide": {
+      "post": {
+        "summary": "Approve or deny ticket creation",
+        "description": "Resume an interrupted agent run with 'yes' or 'no' after needs_approval=true.",
+        "operationId": "ChatDecide",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "required": true,
+            "type": "integer"
+          },
+          {
+            "name": "decision",
+            "in": "query",
+            "required": true,
+            "type": "string",
+            "description": "yes/no/approve/deny"
+          }
+        ],
+        "responses": {
+          "200": { "description": "Final agent answer", "schema": { "$ref": "#/definitions/ChatResponse" } },
+          "422": { "description": "Invalid decision" }
+        }
+      }
+    },
+    "/tickets": {
+      "get": {
+        "summary": "List tickets",
+        "description": "List tickets for the caller's tenant (paginated).",
+        "operationId": "TicketsList",
+        "parameters": [
+          { "name": "page", "in": "query", "required": false, "type": "integer", "default": 1 },
+          { "name": "size", "in": "query", "required": false, "type": "integer", "default": 20 }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ticket list",
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/TicketResponse" }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create ticket",
+        "description": "Create a ticket and auto-compute SLA deadlines.",
+        "operationId": "TicketsCreate",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["title", "description"],
+              "properties": {
+                "title": { "type": "string", "minLength": 3, "maxLength": 500 },
+                "description": { "type": "string", "minLength": 5 },
+                "category": { "type": "string", "default": "Technical Support" },
+                "priority": { "type": "string", "enum": ["P1", "P2", "P3", "P4"], "default": "P3" }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": { "description": "Created ticket", "schema": { "$ref": "#/definitions/TicketResponse" } }
+        }
+      }
+    },
+    "/tickets/{ticket_id}": {
+      "get": {
+        "summary": "Get ticket",
+        "description": "Return a single ticket scoped to the caller's tenant.",
+        "operationId": "TicketsGet",
+        "parameters": [
+          { "name": "ticket_id", "in": "path", "required": true, "type": "integer" }
+        ],
+        "responses": {
+          "200": { "description": "Ticket", "schema": { "$ref": "#/definitions/TicketResponse" } },
+          "404": { "description": "Not found" }
+        }
+      }
+    },
+    "/memory/ingest": {
+      "post": {
+        "summary": "Teach the agent (self-training)",
+        "description": "Ingest an issue/resolution payload so the agent learns it for future queries.",
+        "operationId": "MemoryIngest",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["payload"],
+              "properties": {
+                "payload": {
+                  "type": "object",
+                  "description": "Arbitrary object with at least 'issue' and 'resolution'.",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": { "description": "Training run created", "schema": { "type": "object" } },
+          "422": { "description": "Payload missing issue/resolution" }
+        }
+      }
+    },
+    "/memory/recall": {
+      "post": {
+        "summary": "Recall learned memory",
+        "description": "Return relevant learned memory entries for a query.",
+        "operationId": "MemoryRecall",
+        "parameters": [
+          { "name": "query", "in": "query", "required": true, "type": "string" },
+          { "name": "top_k", "in": "query", "required": false, "type": "integer", "default": 3 }
+        ],
+        "responses": {
+          "200": {
+            "description": "Memory entries",
+            "schema": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/MemoryEntryResponse" }
+            }
+          }
+        }
+      }
+    },
+    "/memory/case-studies": {
+      "post": {
+        "summary": "Add case study",
+        "description": "Store a labeled case study for supervised self-training.",
+        "operationId": "MemoryCaseStudy",
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "required": ["title", "description", "resolution"],
+              "properties": {
+                "title": { "type": "string", "minLength": 3, "maxLength": 500 },
+                "description": { "type": "string", "minLength": 3 },
+                "resolution": { "type": "string", "minLength": 5 },
+                "priority": { "type": "string", "enum": ["P1", "P2", "P3", "P4"], "default": "P3" },
+                "category": { "type": "string", "default": "Technical" },
+                "tags": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          }
+        ],
+        "responses": {
+          "201": { "description": "Created", "schema": { "type": "object" } }
+        }
+      }
+    },
+    "/connectors/status": {
+      "get": {
+        "summary": "Connectors status",
+        "description": "Return the enabled/configured state of every external source (SharePoint, Teams, Outlook, Web search).",
+        "operationId": "ConnectorsStatus",
+        "responses": {
+          "200": {
+            "description": "Connector statuses",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "connectors": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": { "type": "string" },
+                      "label": { "type": "string" },
+                      "enabled": { "type": "boolean" },
+                      "configured": { "type": "boolean" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": { "description": "Unauthorized" }
+        }
+      }
+    },
+    "/connectors/search": {
+      "post": {
+        "summary": "Search external sources",
+        "description": "Search the configured O365 connectors and optionally the public web. Falls back gracefully when connectors are disabled.",
+        "operationId": "ConnectorsSearch",
+        "parameters": [
+          { "name": "query", "in": "query", "required": true, "type": "string" },
+          { "name": "top_k", "in": "query", "required": false, "type": "integer", "default": 5 },
+          { "name": "include_web", "in": "query", "required": false, "type": "boolean", "default": true }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "schema": {
+              "type": "object",
+              "required": ["query", "count", "results"],
+              "properties": {
+                "query": { "type": "string" },
+                "count": { "type": "integer" },
+                "results": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "title": { "type": "string" },
+                      "content": { "type": "string" },
+                      "source": { "type": "string" },
+                      "url": { "type": "string" },
+                      "score": { "type": "number" },
+                      "metadata": { "type": "object" }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": { "description": "Missing query" }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "UserResponse": {
+      "type": "object",
+      "required": ["id", "email", "username", "full_name", "role", "is_active", "is_superuser"],
+      "properties": {
+        "id": { "type": "integer" },
+        "email": { "type": "string" },
+        "username": { "type": "string" },
+        "full_name": { "type": "string" },
+        "role": { "type": "string" },
+        "is_active": { "type": "boolean" },
+        "is_superuser": { "type": "boolean" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "ChatResponse": {
+      "type": "object",
+      "required": ["answer", "session_id"],
+      "properties": {
+        "answer": { "type": "string" },
+        "session_id": { "type": "integer" },
+        "priority": { "type": "string" },
+        "category": { "type": "string" },
+        "sla_due_at": { "type": "string", "format": "date-time" },
+        "needs_approval": { "type": "boolean", "default": false },
+        "decision_prompt": { "type": "string" },
+        "sources": { "type": "array", "items": { "type": "object" } },
+        "used_connectors": { "type": "boolean", "default": false },
+        "used_web_search": { "type": "boolean", "default": false },
+        "subagent_results": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "TicketResponse": {
+      "type": "object",
+      "required": ["id", "ticket_number", "tenant_id", "title", "description", "priority", "status"],
+      "properties": {
+        "id": { "type": "integer" },
+        "ticket_number": { "type": "string" },
+        "tenant_id": { "type": "integer" },
+        "user_id": { "type": "integer" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "category": { "type": "string" },
+        "priority": { "type": "string" },
+        "status": { "type": "string" },
+        "assignee_id": { "type": "integer" },
+        "sla_due_at": { "type": "string", "format": "date-time" },
+        "sla_escalation_at": { "type": "string", "format": "date-time" },
+        "resolved_at": { "type": "string", "format": "date-time" },
+        "created_at": { "type": "string", "format": "date-time" },
+        "updated_at": { "type": "string", "format": "date-time" }
+      }
+    },
+    "MemoryEntryResponse": {
+      "type": "object",
+      "required": ["id", "memory_type", "content", "source", "confidence", "times_used", "created_at"],
+      "properties": {
+        "id": { "type": "integer" },
+        "memory_type": { "type": "string" },
+        "content": { "type": "string" },
+        "source": { "type": "string" },
+        "confidence": { "type": "number" },
+        "times_used": { "type": "integer" },
+        "metadata_json": { "type": "object" },
+        "created_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}
