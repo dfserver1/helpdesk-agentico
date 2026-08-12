@@ -1,5 +1,5 @@
 """
-Agent state schema for HelpDesk Enterprise Copilot v12.
+Agent state schema for HelpDesk Enterprise Copilot.
 TypedDict-based LangGraph state with typed message flow.
 """
 

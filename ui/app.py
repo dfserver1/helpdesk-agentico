@@ -1,5 +1,5 @@
 """
-Streamlit frontend for HelpDesk Enterprise Copilot v12.
+Streamlit frontend for HelpDesk Enterprise Copilot.
 
 Run:
     streamlit run ui/app.py
@@ -21,7 +21,7 @@ from config.logging import get_logger
 
 logger = get_logger("ui")
 
-APP_TITLE = "HelpDesk Enterprise Copilot v12"
+APP_TITLE = "HelpDesk Enterprise Copilot"
 
 # Page setup ---------------------------------------------------------------
 st.set_page_config(

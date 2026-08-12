@@ -1,5 +1,5 @@
 """
-Configuration management for HelpDesk Enterprise Copilot v12.
+Configuration management for HelpDesk Enterprise Copilot.
 Uses Pydantic Settings for type-safe environment variable loading.
 """
 
@@ -147,7 +147,7 @@ class Settings(BaseSettings):
     LANGCHAIN_TRACING_V2: bool = False
     LANGCHAIN_ENDPOINT: str = "https://api.smith.langchain.com"
     LANGCHAIN_API_KEY: str = ""
-    LANGCHAIN_PROJECT: str = "helpdesk-copilot-v12"
+    LANGCHAIN_PROJECT: str = "helpdesk-copilot"
 
     # --- Langfuse ---
     LANGFUSE_PUBLIC_KEY: str = ""

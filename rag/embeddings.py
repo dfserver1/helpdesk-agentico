@@ -1,5 +1,5 @@
 """
-Embeddings factory for HelpDesk Enterprise Copilot v12.
+Embeddings factory for HelpDesk Enterprise Copilot.
 Supports Azure OpenAI embeddings and Google Gemini embeddings based on provider.
 """
 

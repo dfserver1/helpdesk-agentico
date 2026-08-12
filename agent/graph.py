@@ -1,5 +1,5 @@
 """
-LangGraph agent workflow for HelpDesk Enterprise Copilot v12.
+LangGraph agent workflow for HelpDesk Enterprise Copilot.
 
 Flow (Corrective RAG + human-in-the-loop):
 

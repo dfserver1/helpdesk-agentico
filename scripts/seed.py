@@ -1,5 +1,5 @@
 # ============================================================
-# HelpDesk Enterprise Copilot v12 - Seed initial super-admin
+# HelpDesk Enterprise Copilot - Seed initial super-admin
 # Creates the platform super-admin from settings (ADMIN_EMAIL/ADMIN_PASSWORD).
 # Idempotent: updates password/role if the admin already exists.
 # Usage:  python scripts/seed.py

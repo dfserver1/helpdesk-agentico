@@ -1,5 +1,5 @@
 """
-SLA package for HelpDesk Enterprise Copilot v12.
+SLA package for HelpDesk Enterprise Copilot.
 Priority classification (P1-P4), SLA computation, and escalation rules.
 """
 

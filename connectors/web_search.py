@@ -1,5 +1,5 @@
 """
-Web search fallback for HelpDesk Enterprise Copilot v12.
+Web search fallback for HelpDesk Enterprise Copilot.
 
 Used when the internal knowledge base and connectors produce no relevant
 documentation. Searches the public web through trustworthy sources:

@@ -1,5 +1,5 @@
 """
-Config package for HelpDesk Enterprise Copilot v12.
+Config package for HelpDesk Enterprise Copilot.
 """
 
 from config.settings import get_settings, Settings

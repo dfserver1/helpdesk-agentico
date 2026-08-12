@@ -1,5 +1,5 @@
 """
-ITSM Priority Classifier for HelpDesk Enterprise Copilot v12.
+ITSM Priority Classifier for HelpDesk Enterprise Copilot.
 Classifies tickets into P1-P4 based on impact and urgency, mapped to the
 company's 11-SLA/PriorityMatrix.md:
     P1 Critico | P2 Alto | P3 Medio | P4 Bajo

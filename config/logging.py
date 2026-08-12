@@ -1,5 +1,5 @@
 """
-Logging configuration for HelpDesk Enterprise Copilot v12.
+Logging configuration for HelpDesk Enterprise Copilot.
 Supports JSON and human-readable formats with structured logging.
 """
 

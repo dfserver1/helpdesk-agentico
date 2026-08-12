@@ -1,5 +1,5 @@
 """
-API schemas package for HelpDesk Enterprise Copilot v12.
+API schemas package for HelpDesk Enterprise Copilot.
 """
 
 from api.schemas.auth import (

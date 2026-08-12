@@ -1,5 +1,5 @@
 """
-Async HTTP client for the HelpDesk Copilot v12 REST API.
+Async HTTP client for the HelpDesk Copilot REST API.
 """
 
 import os

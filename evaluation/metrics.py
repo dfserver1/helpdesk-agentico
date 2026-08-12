@@ -1,5 +1,5 @@
 """
-Evaluation metrics for the HelpDesk Copilot v12.
+Evaluation metrics for the HelpDesk Copilot.
 
 Provides both heuristic metrics that run with zero external service
 (context precision/recall, answer faithfulness) and optional LLM-graded

@@ -1,6 +1,6 @@
 # Conexión a Microsoft Copilot Studio
 
-Conecta el agente **HelpDesk Enterprise Copilot v12** a tu agente de **Microsoft
+Conecta el agente **HelpDesk Enterprise Copilot** a tu agente de **Microsoft
 Copilot Studio** mediante un **Custom Connector de Power Platform**.
 
 > El despliegue del backend (HF Spaces + Gemini gratis) se explica en

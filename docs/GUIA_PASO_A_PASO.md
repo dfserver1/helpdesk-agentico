@@ -1,4 +1,4 @@
-# Guía paso a paso — HelpDesk Enterprise Copilot v12
+# Guía paso a paso — HelpDesk Enterprise Copilot
 
 > Para quien recibe este proyecto por primera vez: cómo configurarlo, ejecutarlo
 > en local, ponerlo en producción (gratis) y usarlo. Sin conocimientos previos
@@ -139,7 +139,7 @@ Abre el navegador en **http://localhost:8501** → ya puedes usar el agente.
 ```bash
 git init
 git add .
-git commit -m "HelpDesk Enterprise Copilot v12"
+git commit -m "HelpDesk Enterprise Copilot"
 git branch -M main
 git remote add origin https://github.com/TU_USUARIO/helpdesk-copilot.git
 git push -u origin main

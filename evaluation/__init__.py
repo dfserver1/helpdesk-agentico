@@ -1,5 +1,5 @@
 """
-Evaluation package for HelpDesk Enterprise Copilot v12.
+Evaluation package for HelpDesk Enterprise Copilot.
 """
 
 from evaluation.metrics import (

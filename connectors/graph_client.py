@@ -1,5 +1,5 @@
 """
-Microsoft Graph client for HelpDesk Enterprise Copilot v12.
+Microsoft Graph client for HelpDesk Enterprise Copilot.
 
 Interacts with SharePoint (drives/sites), Teams (channels/messages) and
 Outlook (messages via Graph search endpoint) using a client-credentials

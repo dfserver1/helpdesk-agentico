@@ -1,5 +1,5 @@
 """
-Database and ORM models for HelpDesk Enterprise Copilot v12.
+Database and ORM models for HelpDesk Enterprise Copilot.
 Uses SQLAlchemy 2.0 with typed mappings.
 """
 

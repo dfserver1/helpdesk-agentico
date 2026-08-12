@@ -1,5 +1,5 @@
 """
-Self-Training Memory Service for HelpDesk Enterprise Copilot v12.
+Self-Training Memory Service for HelpDesk Enterprise Copilot.
 
 Core differentiator: the agent learns continuously from real usage.
 

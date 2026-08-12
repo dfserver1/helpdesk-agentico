@@ -1,5 +1,5 @@
 """
-Database package for HelpDesk Enterprise Copilot v12.
+Database package for HelpDesk Enterprise Copilot.
 """
 
 from database.models import (

@@ -1,5 +1,5 @@
 """
-API routes package for HelpDesk Enterprise Copilot v12.
+API routes package for HelpDesk Enterprise Copilot.
 """
 
 from fastapi import APIRouter

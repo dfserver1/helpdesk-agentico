@@ -1,5 +1,5 @@
 """
-Escalation rules for HelpDesk Enterprise Copilot v12.
+Escalation rules for HelpDesk Enterprise Copilot.
 Defines when and to whom tickets escalate based on SLA breaches,
 priority, and organizational tier structure (L1/L2/L3 support).
 """

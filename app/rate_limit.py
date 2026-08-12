@@ -1,5 +1,5 @@
 """
-Rate limiter for HelpDesk Enterprise Copilot v12.
+Rate limiter for HelpDesk Enterprise Copilot.
 
 The limiter is defined here (instead of in app.main) so API routes can import
 it without creating an import cycle (routes -> main -> routes).

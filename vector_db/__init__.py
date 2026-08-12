@@ -1,5 +1,5 @@
 """
-Vector DB package for HelpDesk Enterprise Copilot v12.
+Vector DB package for HelpDesk Enterprise Copilot.
 """
 
 from vector_db.chroma_store import (

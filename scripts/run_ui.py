@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT))
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Start the HelpDesk Copilot v12 UI")
+    parser = argparse.ArgumentParser(description="Start the HelpDesk Copilot UI")
     parser.add_argument("--port", type=int, default=8501)
     args = parser.parse_args()
 

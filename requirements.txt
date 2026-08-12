@@ -1,5 +1,5 @@
 # ============================================================
-# HelpDesk Enterprise Copilot v12 - Python Dependencies
+# HelpDesk Enterprise Copilot - Python Dependencies
 # ============================================================
 
 # --- Web Framework ---

@@ -1,5 +1,5 @@
 """
-RAG package for HelpDesk Enterprise Copilot v12.
+RAG package for HelpDesk Enterprise Copilot.
 """
 
 from rag.embeddings import get_embeddings, load_embeddings

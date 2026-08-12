@@ -17,7 +17,7 @@ from config.settings import get_settings  # noqa: E402
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Start the HelpDesk Copilot v12 API")
+    parser = argparse.ArgumentParser(description="Start the HelpDesk Copilot API")
     parser.add_argument("--prod", action="store_true", help="Run in production mode (no reload)")
     parser.add_argument("--port", type=int, default=None)
     args = parser.parse_args()

@@ -1,5 +1,5 @@
 """
-Core exceptions for HelpDesk Enterprise Copilot v12.
+Core exceptions for HelpDesk Enterprise Copilot.
 """
 
 from typing import Any, Dict, Optional

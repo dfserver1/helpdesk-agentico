@@ -1,5 +1,5 @@
 """
-Interactive CLI for HelpDesk Enterprise Copilot v12.
+Interactive CLI for HelpDesk Enterprise Copilot.
 
 Talks to the REST API (default) or runs the agent in-process (--local).
 
@@ -32,12 +32,12 @@ BANNER = r"""     _   _      _          _              ____
     | |_| |/ _ \ '_ \ / _ \ | '_ ` _ \/ _` | | | / __/ _ \/ __|
     |  _  |  __/ | | |  __/ | | | | | | (_| |_| | (_|  __/\__ \
     |_| |_|\___|_| |_|\___|_|_| |_| |_|\__,_|___/\___\___||___/
-    Enterprise Copilot v12 — multithreaded + connectors + OAuth
+    Enterprise Copilot — multithreaded + connectors + OAuth
 """
 
 
 def _parse() -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="HelpDesk Copilot v12 interactive CLI")
+    p = argparse.ArgumentParser(description="HelpDesk Copilot interactive CLI")
     p.add_argument("--base-url", default=os.getenv("API_BASE_URL", "http://localhost:8000"))
     p.add_argument("--email", default=os.getenv("HD_EMAIL"))
     p.add_argument("--password", default=os.getenv("HD_PASSWORD"))

@@ -41,7 +41,7 @@ def load_samples(dataset_path) -> list:
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description="HelpDesk Copilot v12 evaluation harness")
+    parser = argparse.ArgumentParser(description="HelpDesk Copilot evaluation harness")
     parser.add_argument("--dataset", default="evaluation/dataset.py", help="Dataset file (.py or .json)")
     parser.add_argument("--format", default="text", choices=["text", "json"])
     parser.add_argument("--output", default=None, help="Write JSON report to file")

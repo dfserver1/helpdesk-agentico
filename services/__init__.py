@@ -1,5 +1,5 @@
 """
-Services package for HelpDesk Enterprise Copilot v12.
+Services package for HelpDesk Enterprise Copilot.
 """
 
 # Imported lazily to avoid heavy circular deps at package import time.

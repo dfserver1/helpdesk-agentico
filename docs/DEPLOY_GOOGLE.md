@@ -1,6 +1,6 @@
 # Despliegue en la nube GRATIS (Hugging Face Spaces + Google Gemini)
 
-Guía para publicar **HelpDesk Enterprise Copilot v12** en producción sin costo:
+Guía para publicar **HelpDesk Enterprise Copilot** en producción sin costo:
 backend en **Hugging Face Spaces (Docker)**, base de datos y memoria en
 **Supabase (gratis)**, LLM de **Google Gemini** (gratis), código en **GitHub**.
 
@@ -14,7 +14,7 @@ backend en **Hugging Face Spaces (Docker)**, base de datos y memoria en
 ```bash
 git init
 git add .
-git commit -m "HelpDesk Enterprise Copilot v12 — RAG + self-learning memory"
+git commit -m "HelpDesk Enterprise Copilot — RAG + self-learning memory"
 git branch -M main
 git remote add origin https://github.com/<usuario>/helpdesk-copilot.git
 git push -u origin main

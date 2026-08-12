@@ -1,5 +1,5 @@
 """
-Agent tools for HelpDesk Enterprise Copilot v12.
+Agent tools for HelpDesk Enterprise Copilot.
 
 Tools:
   - search_knowledge_base : RAG-powered KB lookup (read-only)

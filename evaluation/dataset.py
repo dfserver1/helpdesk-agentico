@@ -1,5 +1,5 @@
 """
-Sample labeled evaluation dataset for the HelpDesk Copilot v12.
+Sample labeled evaluation dataset for the HelpDesk Copilot.
 These are representative IT helpdesk Q&A pairs.
 """
 

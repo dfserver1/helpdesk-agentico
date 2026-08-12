@@ -1,5 +1,5 @@
 """
-FastAPI application entrypoint for HelpDesk Enterprise Copilot v12.
+FastAPI application entrypoint for HelpDesk Enterprise Copilot.
 """
 
 from contextlib import asynccontextmanager

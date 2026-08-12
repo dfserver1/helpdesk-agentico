@@ -1,5 +1,5 @@
 """
-Integration tests for the HelpDesk Copilot v12 REST API.
+Integration tests for the HelpDesk Copilot REST API.
 """
 
 

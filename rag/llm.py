@@ -1,5 +1,5 @@
 """
-LLM factory for HelpDesk Enterprise Copilot v12.
+LLM factory for HelpDesk Enterprise Copilot.
 Supports Azure OpenAI and Google Gemini chat models.
 """
 

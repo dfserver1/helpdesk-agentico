@@ -1,5 +1,5 @@
 """
-SLA Engine for HelpDesk Enterprise Copilot v12.
+SLA Engine for HelpDesk Enterprise Copilot.
 Calculates SLA due times (business-hours aware), tracks breach state,
 and drives automatic escalation based on the PriorityMatrix:
     P1 Critico | P2 Alto | P3 Medio | P4 Bajo

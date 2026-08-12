@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🤖 HelpDesk Enterprise Copilot v12
+# 🤖 HelpDesk Enterprise Copilot
 
 **Agente RAG de soporte IT empresarial con memoria autocapacitada**
 Aprende de cada caso resuelto y mejora con el uso. Funciona con **Google Gemini gratis** (LLM + embeddings) y se despliega en la nube pública **sin costo**.
@@ -188,6 +188,87 @@ docker compose up --build
 
 ---
 
+## 🤖 Desplegarlo en Microsoft Copilot Studio
+
+Puedes conectar este agente a **Microsoft Copilot Studio** como una herramienta
+(tool) para que tus copilotos corporativos respondan con tu base de
+conocimiento y memoria. Se hace mediante un **Custom Connector de Power
+Platform**.
+
+### Qué necesitas
+
+- Backend publicado y accesible (p. ej. URL de tu HF Space
+  `https://<usuario>-helpdesk-copilot.hf.space`).
+- La especificación **OpenAPI 2.0 (Swagger)** ya lista:
+  [`docs/copilot_studio_openapi.json`](./docs/copilot_studio_openapi.json).
+- Un usuario/agente con rol `agent` o `admin` y su **token JWT**.
+
+### 1. Crear el Custom Connector
+
+1. Descarga `docs/copilot_studio_openapi.json`.
+2. En **Power Automate / Power Apps** → **Data → Custom connectors → New →
+   Import an OpenAPI file**, sube el archivo.
+3. En **General**, revisa el **host** (debe ser la URL de tu backend, p. ej.
+   `https://<usuario>-helpdesk-copilot.hf.space`) y ajusta el basePath a
+   `/api/v1` si no lo toma del archivo.
+4. En **Security** elige **API Key**: parámetro `Authorization`, ubicación
+   `Header`.
+5. En **Definition** verás las acciones disponibles:
+
+   | Acción | Endpoint | Descripción |
+   |--------|----------|-------------|
+   | `AuthLogin` | `POST /auth/login` | Autenticarse (devuelve el token) |
+   | `Chat` | `POST /chat` | Responder a una consulta |
+   | `ChatDecide` | `POST /chat/{id}/decide` | Aprobar/rechazar ticket (HITL) |
+   | `TicketsList` | `GET /tickets` | Listar tickets |
+   | `TicketsCreate` | `POST /tickets` | Crear ticket (calcula SLA) |
+   | `MemoryIngest` | `POST /memory/ingest` | Enseñar al agente (self-training) |
+   | `MemoryRecall` | `POST /memory/recall` | Recuperar memoria aprendida |
+   | `ConnectorsStatus` | `GET /connectors/status` | Estado de conectores O365/web |
+   | `ConnectorsSearch` | `POST /connectors/search` | Buscar SharePoint/Teams/Outlook/web |
+
+6. **Create + Test** una conexión con un token válido.
+
+### 2. Obtener el token del agente
+
+```bash
+curl -s -X POST https://<usuario>-helpdesk-copilot.hf.space/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"agente@helpdesk.ai","password":"..."}' | jq -r .access_token
+```
+
+> Los tokens JWT expiran a los **60 min** por defecto (configurable con
+> `JWT_ACCESS_TOKEN_EXPIRE_MINUTES`). Para producción crea un usuario dedicado
+> (rol `agent`) y renueva el token cuando caduque.
+
+### 3. Usar el connector en Copilot Studio
+
+1. En **Copilot Studio**: tu agente → **Tools → Add a tool → Connector**, y
+   elige el custom connector creado.
+2. Asigna los parámetros:
+   - `message` → **"Dynamically fill with AI"** para que el copilot extraiga el
+     texto de la conversación.
+   - `session_id` → opcional; déjalo dinámico para continuar conversaciones.
+3. Guarda y prueba en el panel de test del agente.
+
+### Consideraciones de producción
+
+- **OAuth2 federado (Entra ID / Microsoft 365):** el código ya incluye la ruta
+  OAuth para Microsoft (`/api/v1/auth/oauth/microsoft`), pero el custom
+  connector con credenciales de aplicación requiere configuración extra de
+  validación de tokens de Entra. Para la mayoría de casos, **API Key con token
+  JWT** es suficiente.
+- **Rate limiting:** login 10/min, chat 60/min por IP; sube
+  `RATE_LIMIT_PER_MINUTE` si el copilot satura.
+- **Human-in-the-loop:** cuando `ChatResponse.needs_approval=true`, usa
+  `ChatDecide` con `decision=yes/no` para cerrar el ticket.
+- **Concurrencia:** el backend procesa varias sesiones en paralelo
+  (`MAX_CONCURRENT_SESSIONS=8`).
+
+📄 Documentación completa: [`docs/DEPLOY_COPILOT_STUDIO.md`](./docs/DEPLOY_COPILOT_STUDIO.md)
+
+---
+
 ## 🔌 API (principales endpoints)
 
 | Método | Ruta | Descripción |
@@ -274,12 +355,12 @@ para auditar el origen de la respuesta (KB, conectores o web).
 
 ## 📄 Licencia
 
-**MIT License** — Copyright (c) 2026 **Omar Pajares**.
+**MIT License** — Copyright (c) 2026 **zero_cyber**.
 
 Proyecto de código abierto y gratuito: puedes usarlo, modificarlo y
 redistribuirlo libremente, incluso en empresas, con la única condición de
 conservar el aviso de copyright. Ver [LICENSE](./LICENSE).
 
 <div align="center">
-  <sub>Hecho con ❤️ por la comunidad · HelpDesk Enterprise Copilot v12</sub>
+  <sub>Hecho con ❤️ por la comunidad · HelpDesk Enterprise Copilot</sub>
 </div>

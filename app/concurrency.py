@@ -1,5 +1,5 @@
 """
-Concurrency infrastructure for HelpDesk Enterprise Copilot v12.
+Concurrency infrastructure for HelpDesk Enterprise Copilot.
 
 Provides:
   - A shared ThreadPoolExecutor for running blocking/CPU-heavy work (LLM,

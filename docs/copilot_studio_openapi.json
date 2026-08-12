@@ -2,7 +2,7 @@
   "swagger": "2.0",
   "info": {
     "title": "HelpDesk Enterprise Copilot API",
-    "description": "Custom connector to the HelpDesk Enterprise Copilot v12 RAG agent. Use POST /auth/login to obtain a JWT access token, then the connector sends it as 'Authorization: Bearer <token>'. Configure the connector authentication as API-Key with parameter name 'Authorization' and location 'Header'.",
+    "description": "Custom connector to the HelpDesk Enterprise Copilot RAG agent. Use POST /auth/login to obtain a JWT access token, then the connector sends it as 'Authorization: Bearer <token>'. Configure the connector authentication as API-Key with parameter name 'Authorization' and location 'Header'.",
     "version": "12.0.0"
   },
   "host": "tu-usuario-helpdesk.hf.space",

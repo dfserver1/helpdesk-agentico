@@ -1,5 +1,5 @@
 """
-Core RAG pipeline for HelpDesk Enterprise Copilot v12.
+Core RAG pipeline for HelpDesk Enterprise Copilot.
 
 Full flow:
   1. Rewrite query for better retrieval (using chat history)

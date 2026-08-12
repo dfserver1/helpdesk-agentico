@@ -1,5 +1,5 @@
 """
-OAuth 2.0 helper for HelpDesk Enterprise Copilot v12.
+OAuth 2.0 helper for HelpDesk Enterprise Copilot.
 
 Supports "Login with Google" and "Login with Microsoft 365 / Entra ID" using the
 Authorization Code flow (PKCE for browser clients). Exchanges the code for a

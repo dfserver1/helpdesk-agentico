@@ -1,5 +1,5 @@
 """
-Auth package for HelpDesk Enterprise Copilot v12.
+Auth package for HelpDesk Enterprise Copilot.
 """
 
 from auth.security import (

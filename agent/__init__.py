@@ -1,5 +1,5 @@
 """
-Agent package for HelpDesk Enterprise Copilot v12.
+Agent package for HelpDesk Enterprise Copilot.
 """
 
 from agent.state import AgentState, initial_state

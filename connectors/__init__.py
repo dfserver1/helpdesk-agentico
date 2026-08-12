@@ -1,5 +1,5 @@
 """
-Connectors package for HelpDesk Enterprise Copilot v12.
+Connectors package for HelpDesk Enterprise Copilot.
 
 Extends the agent's retrieval with external sources so it can answer from
 O365 (SharePoint / Teams / Outlook via Microsoft Graph) and — when there is no

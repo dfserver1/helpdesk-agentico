@@ -1,5 +1,5 @@
 # ============================================================
-# HelpDesk Enterprise Copilot v12 - Bootstrap / Setup
+# HelpDesk Enterprise Copilot - Bootstrap / Setup
 # Creates venv, installs deps, creates .env from example.
 # Usage:  python scripts/bootstrap.py
 # ============================================================
