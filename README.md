@@ -21,16 +21,6 @@ Aprende de cada caso resuelto y mejora con el uso. Funciona con **Google Gemini 
 
 ---
 
-## ✨ Demo
-
-> 🎬 *Pendiente: agrega tu grabación (`.gif`) en `docs/demo.gif` y enlázala aquí.*
-
-| Cliente | Agente |
-|---------|--------|
-| `<tu video o gif de demostración>` | `<tu video o gif de respuesta>` |
-
----
-
 ## 🧠 Qué hace
 
 Un **HelpDesk con IA** que responde dudas de TI, clasifica incidentes con
