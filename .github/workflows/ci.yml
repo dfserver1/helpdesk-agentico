@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  quality-gates:
+    name: Tests + RAG eval
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run test suite (pytest)
+        env:
+          JWT_SECRET_KEY: ci-secret-key-please-change-32chars-plus
+          LOG_LEVEL: ERROR
+          LOG_FORMAT: json
+        run: |
+          python -m pytest -q
+
+      - name: RAG retrieval quality gate (no LLM required)
+        run: |
+          python scripts/ci_rag_eval.py --min-recall 0.5 --min-precision 0.25

@@ -12,7 +12,8 @@ Aprende de cada caso resuelto y mejora con el uso. Funciona con **Google Gemini 
 [![Gemini](https://img.shields.io/badge/Gemini-Free-4285F4?logo=google&logoColor=white)](https://aistudio.google.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](./Dockerfile)
-[![Tests](https://img.shields.io/badge/Tests-34%20passed-2ea44f)](#-ejecutar-los-tests)
+[![Tests](https://img.shields.io/badge/Tests-47%20passed-2ea44f)](#-ejecutar-los-tests)
+[![CI](https://github.com/dfserver1/helpdesk-agentico/actions/workflows/ci.yml/badge.svg)](https://github.com/dfserver1/helpdesk-agentico/actions/workflows/ci.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/dfserver1/helpdesk-agentico/pulls)
 
 **Código abierto y gratuito (MIT).** Úsalo, modifícalo y contribuye.
@@ -78,14 +79,14 @@ prioridad ITSM (P1–P4), cumple SLAs, abre tickets con aprobación humana y
 | [`agent/`](./agent) | Grafo LangGraph: RAG correctivo, clasificación ITSM, SLA, aprobación humana |
 | [`rag/`](./rag) | Recuperación híbrida BM25 + vectores + reranking CrossEncoder |
 | [`connectors/`](./connectors) | Microsoft Graph (SharePoint/Teams/Outlook) + búsqueda web |
-| [`services/`](./services) | Memoria autocapacitada: episódica, case-studies, feedback |
+| [`services/`](./services) | Memoria autocapacitada + backend de tickets (DB / Freshservice / Jira) |
 | [`api/`](./api) | FastAPI: JWT + RBAC, tickets, chat, ingest, estadísticas, rate limit |
 | [`app/concurrency.py`](./app/concurrency.py) | Sesiones paralelas + sub-agentes map-reduce |
 | [`auth/`](./auth) | OAuth Google y Microsoft 365 (Authorization Code + PKCE) |
 | [`ui/`](./ui) | Interfaz Streamlit: login, chat, tickets, memoria, admin |
 | [`sla/`](./sla) | Clasificador P1–P4 y cálculo de SLA |
 | [`scripts/`](./scripts) | Bootstrap, seed de admin, arranque API/UI/CLI |
-| [`tests/`](./tests) | 34 tests de funcionalidad y seguridad + evaluación RAG |
+| [`tests/`](./tests) | 47 tests de funcionalidad y seguridad + evaluación RAG |
 
 ---
 
@@ -313,6 +314,22 @@ para auditar el origen de la respuesta (KB, conectores o web).
 3. En futuras consultas, `recall()` y el BM25 reutilizan esa solución aprendida
    y el pipeline la fusiona con los resultados vectoriales.
 4. Admins/agentes pueden añadir **case-studies** etiquetados.
+
+---
+
+## 🎫 Backend de tickets (ITSM)
+
+Los tickets que el agente abre tras la aprobación humana se persisten a través de
+un backend intercambiable (`services/ticket_backend.py`):
+
+| Backend | Configuración | Descripción |
+|---------|---------------|-------------|
+| `database` (default) | — | Persiste en la DB del app (`tickets` + `ticket_events`) con número `TK-*`, SLA real y auditoría |
+| `freshservice` | `TICKET_BACKEND=freshservice` + `FRESHSERVICE_BASE_URL`/`API_KEY` | Crea/lee tickets en Freshservice REST API v2 |
+| `jira` | `TICKET_BACKEND=jira` + `JIRA_BASE_URL`/`EMAIL`/`API_TOKEN` | Crea/lee issues en Jira (Cloud) REST API v2 |
+
+Si un backend ITSM se configura pero las credenciales faltan o fallan la llamada,
+el agente **cae de forma segura al backend `database`** para no perder el ticket.
 
 ---
 

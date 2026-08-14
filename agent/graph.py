@@ -405,6 +405,8 @@ def create_ticket_node(state: AgentState) -> dict:
             "summary": draft.get("summary", state.get("user_input", "")),
             "priority": draft.get("priority", "P3"),
             "description": draft.get("description", ""),
+            "tenant_id": state.get("tenant_id", 1),
+            "user_id": state.get("user_id"),
         })
         return {
             "solution": f"Ticket {result.get('ticket_id', 'N/A')} created and routed to the support team.",

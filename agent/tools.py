@@ -9,7 +9,6 @@ Tools:
   - get_sla_policy        : Query SLA targets for a priority (read-only)
 """
 
-import json
 from typing import Any, Dict, Optional
 
 from langchain_core.tools import tool
@@ -18,20 +17,9 @@ from config.logging import get_logger
 from rag.pipeline import get_rag_pipeline
 from sla.classifier import SLA_DEFINITIONS
 from core.exceptions import AgentError
+from services.ticket_backend import TicketRecord, get_ticket_backend
 
 logger = get_logger("agent_tools")
-
-
-# --- Mock ticket store (replace with DB/ITSM connector in production) -----
-_ticket_store: Dict[str, Dict[str, Any]] = {}
-_next_ticket_id = 5000
-
-
-def _new_ticket_id() -> str:
-    global _next_ticket_id
-    tid = f"INC-{_next_ticket_id}"
-    _next_ticket_id += 1
-    return tid
 
 
 @tool
@@ -58,40 +46,66 @@ def search_knowledge_base(query: str, tenant_id: int = 1) -> dict:
 
 @tool
 def get_ticket_status(ticket_id: str) -> dict:
-    """Look up an existing helpdesk ticket by ID (e.g. INC-5001). Read-only."""
-    return _ticket_store.get(
-        ticket_id,
-        {"error": f"No ticket found with id {ticket_id}"},
-    )
+    """Look up an existing helpdesk ticket by ID (e.g. TK-A1B2C3D4E5 or a Jira/Freshservice key). Read-only."""
+    try:
+        backend = get_ticket_backend()
+        record: Optional[TicketRecord] = backend.get_ticket(ticket_id)
+    except Exception as e:
+        logger.error(f"get_ticket_status failed: {e}")
+        return {"error": f"Failed to look up ticket {ticket_id}"}
+    if record is None:
+        return {"error": f"No ticket found with id {ticket_id}"}
+    return record.to_dict()
 
 
 @tool
-def create_ticket(summary: str, priority: str = "P3", description: str = "") -> dict:
+def create_ticket(
+    summary: str,
+    priority: str = "P3",
+    description: str = "",
+    tenant_id: int = 1,
+    user_id: Optional[int] = None,
+    category: str = "Technical Support",
+) -> dict:
     """
     Open a new helpdesk ticket to escalate an issue the knowledge base cannot solve.
     This is IRREVERSIBLE and therefore requires human approval before it writes.
     Pass a clear one-line summary and a sensible priority (P1-P4).
+    Persists through the configured ticket backend (database, Freshservice or Jira).
     """
     # NOTE: actual human-approval gating is handled in the agent graph via
     # interrupt(); this tool only records the ticket after approval.
     from sla.classifier import PRIORITY_LEVELS
 
-    pri = priority.strip().upper()
+    pri = str(priority).strip().upper()
     if pri not in PRIORITY_LEVELS:
         pri = "P3"
 
-    ticket_id = _new_ticket_id()
-    _ticket_store[ticket_id] = {
-        "id": ticket_id,
-        "summary": summary,
-        "description": description,
-        "priority": pri,
-        "status": "OPEN",
-        "assignee": "Unassigned",
-        "created_at": None,  # set by service layer
+    try:
+        backend = get_ticket_backend()
+        record = backend.create_ticket(
+            summary=summary,
+            description=description,
+            priority=pri,
+            tenant_id=tenant_id,
+            user_id=user_id,
+            category=category,
+        )
+    except Exception as e:
+        logger.error(f"create_ticket failed: {e}")
+        return {"created": False, "error": str(e)}
+
+    logger.info(
+        f"Ticket {record.ticket_number} [{pri}] created via {backend.name}: {summary[:80]}"
+    )
+    return {
+        "created": True,
+        "ticket_id": record.ticket_id,
+        "ticket_number": record.ticket_number,
+        "priority": record.priority,
+        "status": record.status,
+        "backend": backend.name,
     }
-    logger.info(f"Ticket created: {ticket_id} [{pri}] {summary[:80]}")
-    return {"created": True, "ticket_id": ticket_id, "priority": pri}
 
 
 

@@ -184,6 +184,19 @@ class Settings(BaseSettings):
     OUTLOOK_ENABLED: bool = True
     CONNECTOR_MAX_RESULTS: int = 8
 
+    # --- Ticket backend (ITSM integration) ---
+    # database | freshservice
+    TICKET_BACKEND: str = "database"
+    # Freshservice (used when TICKET_BACKEND=freshservice)
+    FRESHSERVICE_BASE_URL: str = ""
+    FRESHSERVICE_API_KEY: str = ""
+    FRESHSERVICE_API_KEY_ID: str = ""
+    # Jira (used when TICKET_BACKEND=jira)
+    JIRA_BASE_URL: str = ""
+    JIRA_EMAIL: str = ""
+    JIRA_API_TOKEN: str = ""
+    JIRA_PROJECT_KEY: str = "HELPDESK"
+
     # --- Web Search fallback (when no internal docs) ---
     WEB_SEARCH_ENABLED: bool = True
     WEB_SEARCH_MAX_RESULTS: int = 5
