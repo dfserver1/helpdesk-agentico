@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🤖 HelpDesk Enterprise Copilot
+# 🤖 HelpDesk Enterprise
 
 **Agente RAG de soporte IT empresarial con memoria autocapacitada**
 Aprende de cada caso resuelto y mejora con el uso. Funciona con **Google Gemini gratis** (LLM + embeddings) y se despliega en la nube pública **sin costo**.
