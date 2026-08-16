@@ -84,7 +84,7 @@ def _run_sync(factory):
 
     if "error" in exc_box:
         raise exc_box["error"]
-    return box["result"]
+    return box.get("result")
 
 
 def _new_session_maker():
@@ -265,7 +265,8 @@ class MemoryService:
         query_tokens = set(w.lower() for w in query.split())
         scored = []
         for entry in rows:
-            text = f"{entry.source} {entry.content} {entry.metadata_json.get('source_query', '')}"
+            meta = entry.metadata_json or {}
+            text = f"{entry.source} {entry.content} {meta.get('source_query', '')}"
             text_tokens = set(w.lower() for w in text.split())
             overlap = len(query_tokens & text_tokens)
             if overlap > 0:
@@ -296,7 +297,8 @@ class MemoryService:
 
         docs = []
         for entry in rows:
-            source_query = entry.metadata_json.get("source_query", "")
+            meta = entry.metadata_json or {}
+            source_query = meta.get("source_query", "")
             content = source_query + "\n" + entry.content
             docs.append(Document(
                 page_content=content,
@@ -369,7 +371,7 @@ class MemoryService:
                     return False, None
 
                 parts = [
-                    f"[Past case: {m.metadata_json.get('source_query', 'N/A')} "
+                    f"[Past case: {(m.metadata_json or {}).get('source_query', 'N/A')} "
                     f"(confidence {m.confidence:.2f}, used {m.times_used}x)]\n{m.content}"
                     for m in matches[:3]
                 ]
@@ -402,7 +404,7 @@ class MemoryService:
         context_parts = []
         for m in matches[:3]:
             context_parts.append(
-                f"[Past case: {m.metadata_json.get('source_query', 'N/A')} "
+                f"[Past case: {(m.metadata_json or {}).get('source_query', 'N/A')} "
                 f"(confidence {m.confidence:.2f}, used {m.times_used}x)]\n{m.content}"
             )
             # Increment usage stats
@@ -441,7 +443,7 @@ class MemoryService:
             tenant_id=tenant_id,
             content=solution,
             source_query=query,
-            metadata={"confidence": (metadata or {}).get("source", "user_feedback"), "rating": rating},
+            metadata={"source": (metadata or {}).get("source", "user_feedback"), "rating": rating},
             confidence=confidence,
         )
 

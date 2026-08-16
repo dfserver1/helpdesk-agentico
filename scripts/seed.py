@@ -28,35 +28,36 @@ async def main():
         )
 
     await init_db()
-    async with SessionLocal() as session:
-        email = settings.ADMIN_EMAIL.lower()
-        existing = (
-            await session.execute(select(User).where(User.email == email))
-        ).scalar_one_or_none()
+    try:
+        async with SessionLocal() as session:
+            email = settings.ADMIN_EMAIL.lower()
+            existing = (
+                await session.execute(select(User).where(User.email == email))
+            ).scalar_one_or_none()
 
-        if existing is not None:
-            existing.hashed_password = hash_password(settings.ADMIN_PASSWORD)
-            existing.is_superuser = True
-            existing.is_active = True
-            existing.role = "admin"
+            if existing is not None:
+                existing.hashed_password = hash_password(settings.ADMIN_PASSWORD)
+                existing.is_superuser = True
+                existing.is_active = True
+                existing.role = "admin"
+                await session.commit()
+                print(f"Admin updated: {email}")
+                return
+
+            admin = User(
+                email=email,
+                username="admin",
+                full_name="Platform Administrator",
+                hashed_password=hash_password(settings.ADMIN_PASSWORD),
+                role="admin",
+                is_superuser=True,
+                is_active=True,
+            )
+            session.add(admin)
             await session.commit()
-            print(f"Admin updated: {email}")
-            return
-
-        admin = User(
-            email=email,
-            username="admin",
-            full_name="Platform Administrator",
-            hashed_password=hash_password(settings.ADMIN_PASSWORD),
-            role="admin",
-            is_superuser=True,
-            is_active=True,
-        )
-        session.add(admin)
-        await session.commit()
-        print(f"Admin created: {email}")
-
-    await close_db()
+            print(f"Admin created: {email}")
+    finally:
+        await close_db()
 
 
 if __name__ == "__main__":

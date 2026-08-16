@@ -5,7 +5,7 @@ Chat-related Pydantic schemas.
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ChatMessage(BaseModel):
@@ -15,7 +15,7 @@ class ChatMessage(BaseModel):
 
 
 class ChatRequest(BaseModel):
-    message: str = ""
+    message: str = Field(..., min_length=1, max_length=10000)
     session_id: Optional[int] = None
     use_memory: bool = True
 
@@ -28,6 +28,10 @@ class ChatResponse(BaseModel):
     sla_due_at: Optional[str] = None
     needs_approval: bool = False
     decision_prompt: Optional[str] = None
+    ticket_id: Optional[str] = None
+    ticket_number: Optional[str] = None
+    ticket_status: Optional[str] = None
+    ticket_error: Optional[str] = None
     sources: List[dict] = []
     used_connectors: bool = False
     used_web_search: bool = False

@@ -36,6 +36,7 @@ class TicketResponse(BaseModel):
     category: str
     priority: str
     status: str
+    assignee_id: Optional[int] = None
     sla_due_at: Optional[datetime]
     sla_escalation_at: Optional[datetime]
     resolved_at: Optional[datetime]

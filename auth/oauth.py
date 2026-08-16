@@ -11,6 +11,7 @@ import hashlib
 import os
 import secrets
 import urllib.parse
+from typing import Optional
 
 import httpx
 
@@ -73,30 +74,34 @@ class OAuthProvider:
     def is_configured(self) -> bool:
         return bool(self.client_id and self.client_secret)
 
-    def build_authorize_url(self, state: str) -> str:
-        params = urllib.parse.urlencode(
-            {
-                "client_id": self.client_id,
-                "redirect_uri": self.redirect_uri,
-                "response_type": "code",
-                "scope": self.scope.replace("%20", " "),
-                "state": state,
-            }
-        )
-        return f"{self.authorize_url}?{params}"
+    def build_authorize_url(self, state: str, code_challenge: Optional[str] = None) -> str:
+        params = {
+            "client_id": self.client_id,
+            "redirect_uri": self.redirect_uri,
+            "response_type": "code",
+            "scope": self.scope.replace("%20", " "),
+            "state": state,
+        }
+        # PKCE (RFC 7636) hardens the exchange even if the secret leaks; it is
+        # not supported by every provider (GitHub), so it is opt-in per call.
+        if code_challenge:
+            params["code_challenge"] = code_challenge
+            params["code_challenge_method"] = "S256"
+        return f"{self.authorize_url}?{urllib.parse.urlencode(params)}"
 
-    async def exchange(self, code: str) -> dict:
-        async with httpx.AsyncClient(timeout=20.0, verify=False) as client:
-            resp = await client.post(
-                self.token_url,
-                data={
-                    "code": code,
-                    "client_id": self.client_id,
-                    "client_secret": self.client_secret,
-                    "redirect_uri": self.redirect_uri,
-                    "grant_type": "authorization_code",
-                },
-            )
+    async def exchange(self, code: str, code_verifier: Optional[str] = None) -> dict:
+        data = {
+            "code": code,
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+            "redirect_uri": self.redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        if code_verifier:
+            data["code_verifier"] = code_verifier
+        verify = get_settings().verify_tls
+        async with httpx.AsyncClient(timeout=20.0, verify=verify) as client:
+            resp = await client.post(self.token_url, data=data)
             if resp.status_code != 200:
                 logger.warning(f"OAuth token exchange failed: {resp.status_code} {resp.text[:200]}")
                 raise AuthenticationError("OAuth token exchange failed")
@@ -104,7 +109,8 @@ class OAuthProvider:
 
     async def fetch_profile(self, access_token: str) -> dict:
         headers = {"Authorization": f"Bearer {access_token}"}
-        async with httpx.AsyncClient(timeout=20.0, verify=False) as client:
+        verify = get_settings().verify_tls
+        async with httpx.AsyncClient(timeout=20.0, verify=verify) as client:
             resp = await client.get(self.userinfo_url, headers=headers)
             if resp.status_code != 200:
                 raise AuthenticationError("OAuth profile fetch failed")
@@ -116,7 +122,11 @@ def new_state() -> str:
 
 
 def begin_oauth(name: str) -> tuple:
-    """Return (authorize_url, state). Raises if provider not configured."""
+    """Return (authorize_url, state, verifier). Raises if provider not configured.
+
+    ``verifier`` is the PKCE code verifier the server must remember and send
+    back when exchanging the authorization code (None for providers that do not
+    support PKCE, e.g. GitHub)."""
     if name not in _PROVIDERS:
         raise AuthenticationError(f"Unsupported provider: {name}")
     prov = OAuthProvider(name)
@@ -126,17 +136,23 @@ def begin_oauth(name: str) -> tuple:
             "Set its CLIENT_ID / CLIENT_SECRET in .env."
         )
     state = new_state()
-    return prov.build_authorize_url(state), state
+    verifier = None
+    challenge = None
+    if name in ("google", "microsoft"):
+        verifier, challenge = _pkce()
+    return prov.build_authorize_url(state, code_challenge=challenge), state, verifier
 
 
-async def complete_oauth(name: str, code: str, state: str) -> dict:
+async def complete_oauth(
+    name: str, code: str, state: str, code_verifier: Optional[str] = None
+) -> dict:
     """Exchange code + state for a normalized profile (OAuth-style login)."""
     if name not in _PROVIDERS:
         raise AuthenticationError(f"Unsupported provider: {name}")
     prov = OAuthProvider(name)
     if not prov.is_configured():
         raise AuthenticationError(f"OAuth provider '{name}' is not configured.")
-    token = await prov.exchange(code)
+    token = await prov.exchange(code, code_verifier=code_verifier)
     profile = await prov.fetch_profile(token.get("access_token", ""))
     sub = profile.get("sub")
     email = profile.get("email") or profile.get("userPrincipalName") or ""

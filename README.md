@@ -12,7 +12,7 @@ Aprende de cada caso resuelto y mejora con el uso. Funciona con **Google Gemini 
 [![Gemini](https://img.shields.io/badge/Gemini-Free-4285F4?logo=google&logoColor=white)](https://aistudio.google.com/)
 [![Streamlit](https://img.shields.io/badge/Streamlit-UI-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io/)
 [![Docker](https://img.shields.io/badge/Docker-ready-2496ED?logo=docker&logoColor=white)](./Dockerfile)
-[![Tests](https://img.shields.io/badge/Tests-47%20passed-2ea44f)](#-ejecutar-los-tests)
+[![Tests](https://img.shields.io/badge/Tests-59%20passed-2ea44f)](#-ejecutar-los-tests)
 [![CI](https://github.com/dfserver1/helpdesk-agentico/actions/workflows/ci.yml/badge.svg)](https://github.com/dfserver1/helpdesk-agentico/actions/workflows/ci.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/dfserver1/helpdesk-agentico/pulls)
 
@@ -86,7 +86,7 @@ prioridad ITSM (P1–P4), cumple SLAs, abre tickets con aprobación humana y
 | [`ui/`](./ui) | Interfaz Streamlit: login, chat, tickets, memoria, admin |
 | [`sla/`](./sla) | Clasificador P1–P4 y cálculo de SLA |
 | [`scripts/`](./scripts) | Bootstrap, seed de admin, arranque API/UI/CLI |
-| [`tests/`](./tests) | 47 tests de funcionalidad y seguridad + evaluación RAG |
+| [`tests/`](./tests) | 59 tests de funcionalidad y seguridad + evaluación RAG + E2E chat→ticket |
 
 ---
 
@@ -328,8 +328,32 @@ un backend intercambiable (`services/ticket_backend.py`):
 | `freshservice` | `TICKET_BACKEND=freshservice` + `FRESHSERVICE_BASE_URL`/`API_KEY` | Crea/lee tickets en Freshservice REST API v2 |
 | `jira` | `TICKET_BACKEND=jira` + `JIRA_BASE_URL`/`EMAIL`/`API_TOKEN` | Crea/lee issues en Jira (Cloud) REST API v2 |
 
-Si un backend ITSM se configura pero las credenciales faltan o fallan la llamada,
-el agente **cae de forma segura al backend `database`** para no perder el ticket.
+Si un backend ITSM se configura pero las credenciales faltan, el agente **cae de
+forma segura al backend `database`** para no perder el ticket. Además, si la
+llamada al ITSM **falla en runtime** (red, error HTTP), el ticket aprobado se
+persiste localmente en `database` (nunca se pierde) y la respuesta del chat
+indica el backend real que lo guardó.
+
+> **Nota (coexistencia):** con `TICKET_BACKEND=freshservice|jira`, los tickets
+> del agente viven en el ITSM externo y **no** aparecen en `GET /api/v1/tickets`
+> ni en la UI (que leen la tabla local `tickets`). El servidor lo advierte en
+> los logs al arrancar.
+
+Otras garantías de fiabilidad:
+
+- **Aprobaciones persistentes**: el grafo usa un checkpointer SQLite
+  (`AGENT_CHECKPOINT_DB`, por defecto `./data/checkpoints.sqlite`). Una
+  aprobación pendiente sobrevive a reinicios y a múltiples workers; ya no se
+  pierde si el proceso se reinicia entre `/chat` y `/decide`.
+- **Sin éxito falso**: `POST /api/v1/chat/{id}/decide` devuelve el
+  `ticket_number` real creado (o `ticket_error` si falló). Nunca se reporta
+  "Ticket N/A created".
+- **Aislamiento por tenant**: `get_ticket_status` y las lecturas del backend
+  de DB filtran por `tenant_id`; no se pueden leer tickets de otro tenant.
+- **Categoría correcta**: la categoría clasificada por el LLM se propaga al
+  ticket (antes todos quedaban como "Technical Support").
+- **Concurrencia SQLite**: WAL + `busy_timeout` evitan `database is locked`
+  bajo los 8 hilos de sesión concurrentes.
 
 ---
 

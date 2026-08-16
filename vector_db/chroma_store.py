@@ -15,6 +15,8 @@ from config.logging import get_logger
 from core.exceptions import VectorStoreError
 from rag.embeddings import get_embeddings
 
+import threading
+
 logger = get_logger("vector_store")
 
 
@@ -26,39 +28,44 @@ class VectorStoreManager:
         self.collection_name = collection_name or self.settings.CHROMA_COLLECTION_NAME
         self.chroma_client = None
         self._vectorstore = None
+        self._lock = threading.Lock()
 
     def _ensure_client(self):
         """Ensure ChromaDB client is created."""
         if self.chroma_client is None:
-            import chromadb
+            with self._lock:
+                if self.chroma_client is None:
+                    import chromadb
 
-            persist_dir = Path(self.settings.CHROMA_PERSIST_DIR)
-            persist_dir.mkdir(parents=True, exist_ok=True)
-            try:
-                self.chroma_client = (
-                    chromadb.PersistentClient(path=str(persist_dir))
-                    if self.settings.CHROMA_PERSIST_DIR
-                    else chromadb.Client()
-                )
-                logger.debug(f"ChromaDB client initialized at {persist_dir}")
-            except Exception as e:
-                logger.error(f"Failed to initialize ChromaDB: {e}")
-                raise VectorStoreError(f"Failed to initialize ChromaDB: {e}")
+                    persist_dir = Path(self.settings.CHROMA_PERSIST_DIR)
+                    persist_dir.mkdir(parents=True, exist_ok=True)
+                    try:
+                        self.chroma_client = (
+                            chromadb.PersistentClient(path=str(persist_dir))
+                            if self.settings.CHROMA_PERSIST_DIR
+                            else chromadb.Client()
+                        )
+                        logger.debug(f"ChromaDB client initialized at {persist_dir}")
+                    except Exception as e:
+                        logger.error(f"Failed to initialize ChromaDB: {e}")
+                        raise VectorStoreError(f"Failed to initialize ChromaDB: {e}")
 
     def get_vector_store(self) -> Chroma:
         """Get (or create) the LangChain Chroma wrapper."""
         self._ensure_client()
         if self._vectorstore is None:
-            try:
-                self._vectorstore = Chroma(
-                    client=self.chroma_client,
-                    collection_name=self.collection_name,
-                    embedding_function=get_embeddings(),
-                )
-                logger.debug(f"Vector store ready (collection='{self.collection_name}')")
-            except Exception as e:
-                logger.error(f"Failed to create vector store: {e}")
-                raise VectorStoreError(f"Failed to create vector store: {e}")
+            with self._lock:
+                if self._vectorstore is None:
+                    try:
+                        self._vectorstore = Chroma(
+                            client=self.chroma_client,
+                            collection_name=self.collection_name,
+                            embedding_function=get_embeddings(),
+                        )
+                        logger.debug(f"Vector store ready (collection='{self.collection_name}')")
+                    except Exception as e:
+                        logger.error(f"Failed to create vector store: {e}")
+                        raise VectorStoreError(f"Failed to create vector store: {e}")
         return self._vectorstore
 
     def add_documents(self, documents: List[Document], tenant_id: int) -> int:
@@ -185,8 +192,13 @@ class VectorStoreManager:
 
             collections = self.chroma_client.list_collections()
             for col in collections:
-                if col.name == self.collection_name:
-                    return {"total_chunks": col.count()}
+                col_name = getattr(col, "name", str(col))
+                if col_name == self.collection_name:
+                    count_fn = getattr(col, "count", None)
+                    if count_fn is not None and callable(count_fn):
+                        return {"total_chunks": count_fn()}
+                    actual_col = self.chroma_client.get_collection(self.collection_name)
+                    return {"total_chunks": actual_col.count()}
             return {"total_chunks": 0}
         except Exception as e:
             logger.error(f"Failed to get collection stats: {e}")

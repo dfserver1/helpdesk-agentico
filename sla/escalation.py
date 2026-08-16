@@ -85,7 +85,7 @@ class EscalationEngine:
             return EscalationResult(
                 escalated=True,
                 target=policy.first_level,
-                reason=f"SLA inactivity policy triggered: {reason}",
+                reason=f"SLA inactivity policy triggered: {reasonable}",
                 level=1,
             )
 

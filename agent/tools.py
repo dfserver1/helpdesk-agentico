@@ -17,7 +17,7 @@ from config.logging import get_logger
 from rag.pipeline import get_rag_pipeline
 from sla.classifier import SLA_DEFINITIONS
 from core.exceptions import AgentError
-from services.ticket_backend import TicketRecord, get_ticket_backend
+from services.ticket_backend import DatabaseTicketBackend, TicketRecord, get_ticket_backend
 
 logger = get_logger("agent_tools")
 
@@ -45,11 +45,17 @@ def search_knowledge_base(query: str, tenant_id: int = 1) -> dict:
 
 
 @tool
-def get_ticket_status(ticket_id: str) -> dict:
-    """Look up an existing helpdesk ticket by ID (e.g. TK-A1B2C3D4E5 or a Jira/Freshservice key). Read-only."""
+def get_ticket_status(ticket_id: str, tenant_id: int = 1) -> dict:
+    """Look up an existing helpdesk ticket by ID (e.g. TK-A1B2C3D4E5 or a Jira/Freshservice key).
+    Scoped to the calling tenant so cross-tenant reads are impossible. Read-only."""
     try:
         backend = get_ticket_backend()
-        record: Optional[TicketRecord] = backend.get_ticket(ticket_id)
+        record: Optional[TicketRecord] = backend.get_ticket(ticket_id, tenant_id=tenant_id)
+        # If the configured backend is an external ITSM and cannot find it
+        # (e.g. the ticket was persisted to the local DB via runtime fallback),
+        # reconcile against the database backend too.
+        if record is None and backend.name != "database":
+            record = DatabaseTicketBackend().get_ticket(ticket_id, tenant_id=tenant_id)
     except Exception as e:
         logger.error(f"get_ticket_status failed: {e}")
         return {"error": f"Failed to look up ticket {ticket_id}"}
@@ -83,20 +89,39 @@ def create_ticket(
 
     try:
         backend = get_ticket_backend()
-        record = backend.create_ticket(
-            summary=summary,
-            description=description,
-            priority=pri,
-            tenant_id=tenant_id,
-            user_id=user_id,
-            category=category,
-        )
+        used_backend = backend
+        try:
+            record = backend.create_ticket(
+                summary=summary,
+                description=description,
+                priority=pri,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                category=category,
+            )
+        except Exception as e:
+            if backend.name == "database":
+                raise
+            # Runtime ITSM outage: never lose the ticket. Persist locally so
+            # the approved escalation is recorded and visible in /tickets.
+            logger.warning(
+                f"{backend.name} create_ticket failed ({e}); falling back to database backend"
+            )
+            used_backend = DatabaseTicketBackend()
+            record = used_backend.create_ticket(
+                summary=summary,
+                description=description,
+                priority=pri,
+                tenant_id=tenant_id,
+                user_id=user_id,
+                category=category,
+            )
     except Exception as e:
         logger.error(f"create_ticket failed: {e}")
         return {"created": False, "error": str(e)}
 
     logger.info(
-        f"Ticket {record.ticket_number} [{pri}] created via {backend.name}: {summary[:80]}"
+        f"Ticket {record.ticket_number} [{pri}] created via {used_backend.name}: {summary[:80]}"
     )
     return {
         "created": True,
@@ -104,7 +129,7 @@ def create_ticket(
         "ticket_number": record.ticket_number,
         "priority": record.priority,
         "status": record.status,
-        "backend": backend.name,
+        "backend": used_backend.name,
     }
 
 

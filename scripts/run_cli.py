@@ -32,7 +32,7 @@ BANNER = r"""     _   _      _          _              ____
     | |_| |/ _ \ '_ \ / _ \ | '_ ` _ \/ _` | | | / __/ _ \/ __|
     |  _  |  __/ | | |  __/ | | | | | | (_| |_| | (_|  __/\__ \
     |_| |_|\___|_| |_|\___|_|_| |_| |_|\__,_|___/\___\___||___/
-    Enterprise Copilot — multithreaded + connectors + OAuth
+    HelpDesk Enterprise — Multithreaded + Connectors + OAuth
 """
 
 
@@ -154,9 +154,7 @@ async def _chat_loop(client: APIClient, token: str):
             else:
                 print("  Reply yes or no.")
                 continue
-            resp = await client._request(
-                "POST", f"/chat/{session_id}/decide", token=token, params={"decision": decision}
-            )
+            resp = await client.decide_ticket(session_id, decision, token)
             data = _json(resp)
             print(f"\nAgent> {data.get('answer')}")
 

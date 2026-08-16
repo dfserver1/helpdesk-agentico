@@ -8,6 +8,9 @@ OAuth login routes (Google / Microsoft / GitHub).
 """
 
 import secrets
+import time
+import urllib.parse
+from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
@@ -18,13 +21,48 @@ from api.schemas.auth import TokenResponse, UserResponse
 from app.rate_limit import limiter
 from auth import oauth as oauth_helpers
 from auth.security import create_access_token, create_refresh_token
+from config.logging import get_logger
 from config.settings import get_settings
 from core.exceptions import AuthenticationError
 from database.models import User, get_db_session
 
+logger = get_logger("oauth_routes")
+
 router = APIRouter(prefix="/oauth", tags=["oauth"])
 
 VALID = {"google", "microsoft", "github"}
+_STATE_TTL_SECONDS = 600  # 10 minutes TTL for OAuth authorization states
+_state_cache: dict = {}
+
+
+def _clean_expired_states() -> None:
+    """Prune expired OAuth states to prevent memory exhaustion."""
+    now = time.time()
+    expired = [
+        k for k, v in _state_cache.items()
+        if now - v.get("created_at", 0) > _STATE_TTL_SECONDS
+    ]
+    for k in expired:
+        _state_cache.pop(k, None)
+
+
+def _is_safe_redirect_url(url: str, allowed_origins: list[str]) -> bool:
+    """Validate that a redirect URL points to a trusted origin or relative path."""
+    if not url:
+        return False
+    parsed = urllib.parse.urlparse(url)
+    # Reject protocol-relative or non-http(s) schemes
+    if url.startswith("//") or url.startswith("/\\"):
+        return False
+    # Allow safe relative paths
+    if not parsed.scheme and not parsed.netloc:
+        return url.startswith("/")
+    # Validate absolute URL against configured origins
+    if parsed.scheme in ("http", "https"):
+        origin = f"{parsed.scheme}://{parsed.netloc}".lower()
+        normalized_allowed = {o.rstrip("/").lower() for o in allowed_origins}
+        return origin in normalized_allowed
+    return False
 
 
 @router.get("/{provider}/login")
@@ -37,14 +75,23 @@ async def oauth_login(
     """Start the OAuth authorization flow. Returns the authorize URL."""
     if provider not in VALID:
         raise AuthenticationError(f"Unsupported OAuth provider: {provider}")
-    authorize_url, state = oauth_helpers.begin_oauth(provider)
+    authorize_url, state, verifier = oauth_helpers.begin_oauth(provider)
 
+    settings = get_settings()
+    # Validate redirect_to to prevent open redirect vulnerabilities
+    safe_redirect = (
+        redirect_to
+        if _is_safe_redirect_url(redirect_to, settings.CORS_ORIGINS)
+        else ""
+    )
+
+    _clean_expired_states()
     state_store = {
         "state": state,
-        "redirect_to": redirect_to or "",
+        "verifier": verifier,
+        "redirect_to": safe_redirect,
+        "created_at": time.time(),
     }
-    # Persist state in-memory (single instance). Production multi-worker
-    # deployments should move this to Redis - see config/settings.py.
     _state_cache[state] = state_store
 
     return JSONResponse(
@@ -64,9 +111,19 @@ async def oauth_callback(
     if provider not in VALID:
         raise AuthenticationError(f"Unsupported OAuth provider: {provider}")
 
+    _clean_expired_states()
     state_store = _state_cache.pop(state, None)
+    if state_store is None:
+        # Unknown/replayed/expired state: refuse the exchange (CSRF protection).
+        raise AuthenticationError("OAuth state mismatch or expired")
 
-    identity = await oauth_helpers.complete_oauth(provider, code, state)
+    # Check TTL explicitly
+    if time.time() - state_store.get("created_at", 0) > _STATE_TTL_SECONDS:
+        raise AuthenticationError("OAuth state has expired")
+
+    identity = await oauth_helpers.complete_oauth(
+        provider, code, state, code_verifier=state_store.get("verifier")
+    )
 
     user = await _get_or_create_user(session, identity)
 
@@ -82,7 +139,13 @@ async def oauth_callback(
         "user": UserResponse.model_validate(user).model_dump(),
     }
 
-    redirect_to = (state_store or {}).get("redirect_to") or _default_ui_url(access)
+    raw_redirect = (state_store or {}).get("redirect_to")
+    redirect_to = (
+        raw_redirect
+        if _is_safe_redirect_url(raw_redirect, settings.CORS_ORIGINS)
+        else _default_ui_url(access)
+    )
+
     if redirect_to:
         sep = "&" if "?" in redirect_to else "?"
         return RedirectResponse(url=f"{redirect_to}{sep}token={access}&refresh={refresh}")
@@ -108,6 +171,8 @@ async def _get_or_create_user(session: AsyncSession, identity: dict) -> User:
             .scalar_one_or_none()
         )
         if user is not None:
+            if not user.is_active:
+                raise AuthenticationError("User account is disabled")
             return user
 
     # 2) Match by email
@@ -134,6 +199,9 @@ async def _get_or_create_user(session: AsyncSession, identity: dict) -> User:
         await session.refresh(user)
         return user
 
+    if not user.is_active:
+        raise AuthenticationError("User account is disabled")
+
     # Link provider to existing account
     user.oauth_provider = provider
     if sub:
@@ -143,10 +211,6 @@ async def _get_or_create_user(session: AsyncSession, identity: dict) -> User:
     return user
 
 
-def _default_ui_url(access: str) -> str:
-    s = get_settings()
+def _default_ui_url(access: str = "") -> str:
     # Streamlit frontend default; real deployments should override redirect_to.
-    return f"http://localhost:8501?token={access}"
-
-
-_state_cache: dict = {}
+    return "http://localhost:8501"

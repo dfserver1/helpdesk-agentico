@@ -51,6 +51,10 @@ class AgentState(TypedDict, total=False):
     # Ticket escalation
     ticket_decision: Optional[str]          # approval result: yes/no
     ticket_draft: Optional[Dict[str, Any]]
+    ticket_id: Optional[str]                # external id once created
+    ticket_number: Optional[str]            # human-facing reference (TK-* / ITSM key)
+    ticket_status: Optional[str]
+    ticket_error: Optional[str]             # set when creation failed
 
     # Self-training
     learning_payload: Optional[Dict[str, Any]]  # metadata to store in memory
@@ -58,6 +62,7 @@ class AgentState(TypedDict, total=False):
 
     # SLA
     sla_status: Optional[Dict[str, Any]]
+    sla_due_at: Optional[str]
 
 
 def initial_state(
@@ -92,7 +97,12 @@ def initial_state(
         "needs_human": False,
         "ticket_decision": None,
         "ticket_draft": None,
+        "ticket_id": None,
+        "ticket_number": None,
+        "ticket_status": None,
+        "ticket_error": None,
         "learning_payload": None,
         "feedback": None,
         "sla_status": None,
+        "sla_due_at": None,
     }

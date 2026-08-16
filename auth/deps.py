@@ -33,8 +33,13 @@ async def get_current_user(
     if user_id is None:
         raise AuthenticationError("Token subject missing")
 
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        raise AuthenticationError("Invalid token subject")
+
     user = (
-        (await session.execute(select(User).where(User.id == int(user_id))))
+        (await session.execute(select(User).where(User.id == uid)))
         .scalar_one_or_none()
     )
     if user is None or not user.is_active:

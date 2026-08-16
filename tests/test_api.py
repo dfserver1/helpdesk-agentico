@@ -95,6 +95,43 @@ def test_ticket_crud(client, auth_headers):
     assert "CREATED" in types
 
 
+def test_ticket_reopen_clears_resolved_at_and_audits(client, auth_headers):
+    """Reopening a RESOLVED ticket must clear resolved_at and write an audit
+    event (B3)."""
+    r = client.post(
+        "/api/v1/tickets",
+        headers=auth_headers,
+        json={
+            "title": "Reopen flow",
+            "description": "Test reopen",
+            "priority": "P3",
+        },
+    )
+    assert r.status_code == 201
+    ticket_id = r.json()["id"]
+
+    r = client.patch(
+        f"/api/v1/tickets/{ticket_id}",
+        headers=auth_headers,
+        json={"status": "RESOLVED"},
+    )
+    assert r.status_code == 200
+    assert r.json()["resolved_at"] is not None
+
+    r = client.patch(
+        f"/api/v1/tickets/{ticket_id}",
+        headers=auth_headers,
+        json={"status": "IN_PROGRESS"},
+    )
+    assert r.status_code == 200
+    assert r.json()["resolved_at"] is None
+
+    # Patch must have produced an audit trail.
+    ev = client.get(f"/api/v1/tickets/{ticket_id}/events", headers=auth_headers)
+    types = [e["event_type"] for e in ev.json()]
+    assert types.count("STATUS_CHANGED") == 2
+
+
 def test_ticket_not_found(client, auth_headers):
     r = client.get("/api/v1/tickets/999999", headers=auth_headers)
     assert r.status_code == 404

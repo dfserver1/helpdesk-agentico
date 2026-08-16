@@ -21,12 +21,12 @@ from config.logging import get_logger
 
 logger = get_logger("ui")
 
-APP_TITLE = "HelpDesk Enterprise Copilot"
+APP_TITLE = "HelpDesk Enterprise"
 
 # Page setup ---------------------------------------------------------------
 st.set_page_config(
     page_title=APP_TITLE,
-    page_icon="🎓",
+    page_icon="🛡️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -62,9 +62,36 @@ def _json(resp):
 def safe_call(fn, *args, **kwargs):
     """Run an async API call, surfacing errors succinctly."""
     import asyncio
+    import threading
+
+    def _run():
+        return asyncio.run(fn(*args, **kwargs))
 
     try:
-        return asyncio.run(fn(*args, **kwargs))
+        try:
+            asyncio.get_running_loop()
+            in_loop = True
+        except RuntimeError:
+            in_loop = False
+
+        if not in_loop:
+            return _run()
+
+        box = {}
+        exc_box = {}
+
+        def target():
+            try:
+                box["result"] = _run()
+            except Exception as e:
+                exc_box["error"] = e
+
+        t = threading.Thread(target=target)
+        t.start()
+        t.join()
+        if "error" in exc_box:
+            raise exc_box["error"]
+        return box.get("result")
     except Exception as e:
         st.error(f"API unreachable: {e}")
         return None
@@ -94,10 +121,14 @@ def logout():
     st.rerun()
 
 
-# ─ Login / Register ------------------------------------------------------------
 def auth_page():
-    st.markdown(f"# {APP_TITLE}")
-    st.caption("Enterprise AI Copilot with self-training memory engine")
+    logo_path = Path(__file__).resolve().parent / "logo.png"
+    col_l, col_r = st.columns([1, 4])
+    if logo_path.exists():
+        col_l.image(str(logo_path), width=90)
+    with col_r:
+        st.markdown(f"# {APP_TITLE}")
+        st.caption("Enterprise AI Copilot with self-training memory engine & multi-tenant ITSM")
     tab_login, tab_register = st.tabs(["Login", "Register"])
 
     with tab_login:
@@ -181,10 +212,51 @@ def chat_page():
     st.header("💬 AI Helpdesk Assistant")
     st.caption("Ask IT questions — grounded in your knowledge base and learned memory.")
 
+    # Sidebar: Conversation History / Workspaces
+    with st.sidebar:
+        st.subheader("🗂️ My Conversations")
+        if st.button("➕ New Chat Session", use_container_width=True, type="primary"):
+            ss.chat_session_id = None
+            ss.chat_messages = []
+            st.rerun()
+
+        st.markdown("---")
+        sess_resp = safe_call(get_client().list_sessions, ss.token)
+        if sess_resp and sess_resp.status_code == 200:
+            user_sessions = _json(sess_resp)
+            if not user_sessions:
+                st.caption("No previous conversations.")
+            for s_info in user_sessions:
+                s_id = s_info["id"]
+                s_title = s_info.get("title") or f"Chat #{s_id}"
+                is_active = (ss.get("chat_session_id") == s_id)
+                btn_label = f"💬 {s_title[:28]}" + (" (Active)" if is_active else "")
+                if st.button(btn_label, key=f"session_select_{s_id}", use_container_width=True):
+                    ss.chat_session_id = s_id
+                    # Load message history from DB
+                    msg_resp = safe_call(get_client().get_session_messages, s_id, ss.token)
+                    if msg_resp and msg_resp.status_code == 200:
+                        db_msgs = _json(msg_resp)
+                        ss.chat_messages = [
+                            {
+                                "role": m["role"],
+                                "content": m["content"],
+                                "payload": m.get("payload", {}),
+                            }
+                            for m in db_msgs
+                        ]
+                    st.rerun()
+
+    # Render current session messages
     for msg in ss.get("chat_messages", []):
         role = "user" if msg["role"] == "user" else "assistant"
         with st.chat_message(role):
             st.markdown(msg["content"])
+            payload = msg.get("payload") or {}
+            if payload.get("priority"):
+                st.caption(f"Priority: {payload['priority']} | Category: {payload.get('category')}")
+            if payload.get("ticket_number"):
+                st.caption(f"🎫 Ticket Ref: #{payload['ticket_number']}")
 
     prompt = st.chat_input("Describe your issue...")
     if prompt:
@@ -196,12 +268,23 @@ def chat_page():
         if resp and resp.status_code == 200:
             data = _json(resp)
             ss.chat_session_id = data["session_id"]
-            ss["chat_messages"] = ss.get("chat_messages", []) + [{"role": "assistant", "content": data["answer"]}]
+            ss["chat_messages"] = ss.get("chat_messages", []) + [{
+                "role": "assistant",
+                "content": data["answer"],
+                "payload": {
+                    "priority": data.get("priority"),
+                    "category": data.get("category"),
+                    "sla_due_at": data.get("sla_due_at"),
+                    "ticket_number": data.get("ticket_number"),
+                },
+            }]
             answer = data["answer"]
             with st.chat_message("assistant"):
                 st.markdown(answer)
                 if data.get("priority"):
                     st.caption(f"Priority: {data['priority']} | Category: {data.get('category')}")
+                if data.get("sla_due_at"):
+                    st.caption(f"⏳ SLA Due Date: {data['sla_due_at']}")
                 badges = []
                 if data.get("used_connectors"):
                     badges.append("🔌 Connectors")
@@ -215,6 +298,21 @@ def chat_page():
                     with st.expander(f"Sources ({len(data['sources'])})"):
                         for s in data["sources"]:
                             st.write(s)
+                if data.get("needs_approval"):
+                    st.warning("⚠️ Ticket Creation Requires Approval")
+                    col_yes, col_no = st.columns(2)
+                    if col_yes.button("✅ Approve Ticket", key=f"btn_yes_{data['session_id']}"):
+                        dec_resp = safe_call(get_client().decide_ticket, data["session_id"], "yes", ss.token)
+                        if dec_resp and dec_resp.status_code == 200:
+                            dec_data = _json(dec_resp)
+                            st.success(f"Ticket approved! Ticket #{dec_data.get('ticket_number')}")
+                            st.rerun()
+                    if col_no.button("❌ Decline Ticket", key=f"btn_no_{data['session_id']}"):
+                        dec_resp = safe_call(get_client().decide_ticket, data["session_id"], "no", ss.token)
+                        if dec_resp and dec_resp.status_code == 200:
+                            st.info("Ticket creation declined.")
+                            st.rerun()
+            st.rerun()
         else:
             msg = (_json(resp).get("message") if resp else "") or "Assistant unavailable"
             with st.chat_message("assistant"):
@@ -222,20 +320,46 @@ def chat_page():
 
 
 # ─ Tickets page ----------------------------------------------------------------
+TICKETS_PAGE_SIZE = 10
+
+
 def tickets_page():
     st.title("🎫 Tickets")
     tab_list, tab_new = st.tabs(["My tickets", "Create ticket"])
 
     with tab_list:
-        resp = safe_call(get_client().list_tickets, ss.token)
+        page = ss.get("tickets_page", 1)
+        resp = safe_call(
+            get_client().list_tickets, ss.token, page=page, size=TICKETS_PAGE_SIZE
+        )
         if resp and resp.status_code == 200:
             tickets = _json(resp)
+            total = APIClient.tickets_total(resp)
+            total_pages = max(1, -(-total // TICKETS_PAGE_SIZE))
+            page = min(page, total_pages)
+            ss.tickets_page = page
+
             if not tickets:
                 st.info("No tickets yet — create one below.")
+            else:
+                st.caption(
+                    f"Page {page} of {total_pages} — {total} ticket(s) in total"
+                )
             for t in tickets:
                 with st.expander(f"{t['ticket_number']} — {t['title']} [{t['status']}]"):
                     st.write(f"**Priority:** {t['priority']}  |  **SLA due:** {t.get('sla_due_at')}")
                     st.write(t["description"])
+
+            c1, _, c2, c3 = st.columns([1, 3, 1, 1])
+            if c1.button("← Prev", disabled=(page <= 1), key="tickets_prev"):
+                ss.tickets_page = max(1, page - 1)
+                st.rerun()
+            if c2.button("Next →", disabled=(page >= total_pages), key="tickets_next"):
+                ss.tickets_page = min(total_pages, page + 1)
+                st.rerun()
+            c3.caption(f"{page} / {total_pages}")
+        elif resp:
+            st.error(_json(resp).get("message", "Could not load tickets"))
 
     with tab_new:
         with st.form("new_ticket"):
@@ -261,7 +385,7 @@ def memory_page():
     st.caption("Teach the agent continuously from enterprise metadata (issue → resolution).")
     admin_roles = ("agent", "manager", "admin")
 
-    tab_ingest, tab_case, tab_recall = st.tabs(["Ingest Payload", "Case Study", "Recall"])
+    tab_ingest, tab_case, tab_recall, tab_sync = st.tabs(["Ingest Payload", "Case Study", "Recall", "⚡ Enterprise Sync & Auto-Train"])
 
     with tab_ingest:
         st.markdown("Ingest an arbitrary metadata object including `issue` and `resolution`.")
@@ -327,6 +451,24 @@ def memory_page():
                         st.write(e["content"])
                         st.caption(f"Source: {e['source']} | {e['created_at']}")
 
+    with tab_sync:
+        st.subheader("⚡ Auto-Train from Enterprise Repositories")
+        st.markdown(
+            "Extract guides, incident resolution emails, and documents from **Google Workspace (Drive, Gmail, Docs)** "
+            "and **Microsoft 365 (SharePoint, Teams, Outlook)** to continuously train the HelpDesk agent's memory."
+        )
+        sync_query = st.text_input("Search topic / keywords for harvesting", "IT helpdesk network vpn password troubleshoot policy")
+        sync_top_k = st.slider("Max items to harvest & learn", 5, 50, 15)
+        if st.button("🚀 Harvest & Auto-Train Now", type="primary"):
+            with st.spinner("Connecting to enterprise repositories, extracting knowledge and training memory..."):
+                resp = safe_call(get_client().sync_connectors_and_train, ss.token, sync_query, sync_top_k)
+                if resp and resp.status_code == 200:
+                    data = _json(resp)
+                    st.success(f"✅ {data.get('message')}")
+                    st.json(data)
+                elif resp:
+                    st.error(_json(resp).get("message", "Sync failed"))
+
 
 # ─ Admin page --------------------------------------------------------------------
 def admin_page():
@@ -351,13 +493,16 @@ def main():
         return
 
     with st.sidebar:
+        logo_path = Path(__file__).resolve().parent / "logo.png"
+        if logo_path.exists():
+            st.image(str(logo_path), width=180)
         user = ss.get("user", {})
-        st.markdown(f"**{user.get('full_name', 'User')}**")
-        st.caption(user.get("email", ""))
+        st.markdown(f"**👤 {user.get('full_name') or user.get('username') or 'User'}**")
+        st.caption(f"📧 {user.get('email', '')} | Role: `{user.get('role', 'user')}`")
         st.divider()
         page = st.radio("Navigation", ["Chat", "Tickets", "Self-Training", "Admin"])
         st.divider()
-        if st.button("Sign out"):
+        if st.button("🚪 Sign out", use_container_width=True):
             logout()
 
     if page == "Chat":

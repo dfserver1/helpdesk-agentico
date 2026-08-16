@@ -22,19 +22,30 @@ class ConnectorRegistry:
 
     # ------------------------------------------------------------------
     def _build_persistent(self) -> List[BaseConnector]:
-        if not self.settings.CONNECTORS_ENABLED:
-            return []
         out = []
-        try:
-            from connectors.o365 import OutlookConnector, SharePointConnector, TeamsConnector
+        if self.settings.CONNECTORS_ENABLED:
+            try:
+                from connectors.o365 import OutlookConnector, SharePointConnector, TeamsConnector
 
-            out = [
-                SharePointConnector(),
-                TeamsConnector(),
-                OutlookConnector(),
-            ]
-        except Exception as e:  # pragma: no cover - import safety
-            logger.warning(f"O365 connectors unavailable: {e}")
+                out.extend([
+                    SharePointConnector(),
+                    TeamsConnector(),
+                    OutlookConnector(),
+                ])
+            except Exception as e:  # pragma: no cover - import safety
+                logger.warning(f"O365 connectors unavailable: {e}")
+
+        if getattr(self.settings, "GOOGLE_CONNECTORS_ENABLED", False):
+            try:
+                from connectors.google import GmailConnector, GoogleDriveConnector
+
+                out.extend([
+                    GoogleDriveConnector(),
+                    GmailConnector(),
+                ])
+            except Exception as e:
+                logger.warning(f"Google connectors unavailable: {e}")
+
         return out
 
     # ------------------------------------------------------------------
@@ -146,7 +157,35 @@ def search_all_sources_sync(
 
 
 def _run_sync_bridge(factory):
-    """Run ``factory()`` (returns an awaitable) to completion in this thread."""
+    """Run ``factory()`` (returns an awaitable) to completion safely across thread/loop boundaries."""
     import asyncio
+    import threading
 
-    return asyncio.run(factory())
+    def _run():
+        return asyncio.run(factory())
+
+    try:
+        asyncio.get_running_loop()
+        in_loop = True
+    except RuntimeError:
+        in_loop = False
+
+    if not in_loop:
+        return _run()
+
+    box: dict = {}
+    exc_box: dict = {}
+
+    def target():
+        try:
+            box["result"] = _run()
+        except BaseException as e:
+            exc_box["error"] = e
+
+    thread = threading.Thread(target=target)
+    thread.start()
+    thread.join()
+
+    if "error" in exc_box:
+        raise exc_box["error"]
+    return box.get("result", [])

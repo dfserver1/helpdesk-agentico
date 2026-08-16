@@ -305,14 +305,111 @@ def test_agent_create_ticket_tool_persists():
     assert result["ticket_id"].startswith("TK-")
     assert result["backend"] in ("database", "freshservice", "jira")
 
-    status = get_ticket_status.invoke({"ticket_id": result["ticket_id"]})
+    status = get_ticket_status.invoke({
+        "ticket_id": result["ticket_id"],
+        "tenant_id": 5,
+    })
     assert "error" not in status
     assert status["ticket_number"] == result["ticket_id"]
     assert status["status"] == "OPEN"
+    assert status["tenant_id"] == 5
 
 
 def test_agent_get_ticket_status_missing():
     from agent.tools import get_ticket_status
 
-    status = get_ticket_status.invoke({"ticket_id": "TK-NOTEXIST"})
+    status = get_ticket_status.invoke({"ticket_id": "TK-NOTEXIST", "tenant_id": 1})
     assert "error" in status
+
+
+def test_db_backend_get_ticket_is_tenant_scoped():
+    """A ticket from tenant A must be invisible to a tenant-B lookup."""
+    from services.ticket_backend import DatabaseTicketBackend
+
+    backend = DatabaseTicketBackend()
+    rec = backend.create_ticket(
+        summary="Tenant-scoped issue",
+        priority="P3",
+        tenant_id=9,
+    )
+
+    found_same_tenant = backend.get_ticket(rec.ticket_id, tenant_id=9)
+    assert found_same_tenant is not None
+    assert found_same_tenant.tenant_id == 9
+
+    cross_tenant = backend.get_ticket(rec.ticket_id, tenant_id=2)
+    assert cross_tenant is None
+
+    # Unscoped lookup still works (backward compatible).
+    unscoped = backend.get_ticket(rec.ticket_id)
+    assert unscoped is not None
+
+
+def test_agent_get_ticket_status_cross_tenant_blocked():
+    """The agent tool must not leak tickets across tenants."""
+    from services.ticket_backend import DatabaseTicketBackend
+    from agent.tools import get_ticket_status
+
+    backend = DatabaseTicketBackend()
+    rec = backend.create_ticket(
+        summary="Secret tenant issue",
+        priority="P3",
+        tenant_id=10,
+    )
+
+    # Wrong tenant → not found.
+    blocked = get_ticket_status.invoke({"ticket_id": rec.ticket_id, "tenant_id": 3})
+    assert "error" in blocked
+
+    # Correct tenant → found.
+    ok = get_ticket_status.invoke({"ticket_id": rec.ticket_id, "tenant_id": 10})
+    assert "error" not in ok
+    assert ok["ticket_number"] == rec.ticket_id
+
+
+def test_create_ticket_falls_back_to_database_on_itsm_runtime_failure(monkeypatch):
+    """If the configured ITSM raises at runtime, the ticket must still persist
+    locally (never silently lost) instead of reporting failure."""
+    from agent import tools as agent_tools
+
+    class _ExplodingBackend:
+        name = "freshservice"
+
+        def create_ticket(self, **kwargs):
+            raise ConnectionError("ITSMs are down")
+
+    # Force the factory (as seen by the tool) to return an ITSM that raises.
+    monkeypatch.setattr(agent_tools, "get_ticket_backend", lambda: _ExplodingBackend())
+
+    result = agent_tools.create_ticket.invoke({
+        "summary": "Outage resilience",
+        "priority": "P2",
+        "tenant_id": 11,
+        "user_id": 1,
+    })
+
+    assert result["created"] is True
+    assert result["backend"] == "database"
+    assert result["ticket_id"].startswith("TK-")
+
+
+def test_create_ticket_reports_failure_when_database_fails(monkeypatch):
+    """If even the local database backend fails, the tool must report
+    created=False (no fake success)."""
+    from agent import tools as agent_tools
+
+    class _BrokenDb:
+        name = "database"
+
+        def create_ticket(self, **kwargs):
+            raise RuntimeError("disk full")
+
+    monkeypatch.setattr(agent_tools, "get_ticket_backend", lambda: _BrokenDb())
+
+    result = agent_tools.create_ticket.invoke({
+        "summary": "Failing scenario",
+        "priority": "P3",
+        "tenant_id": 1,
+    })
+    assert result["created"] is False
+    assert "error" in result

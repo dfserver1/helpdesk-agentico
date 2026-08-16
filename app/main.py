@@ -12,6 +12,7 @@ from slowapi.errors import RateLimitExceeded
 
 from api.routes import api_router
 from app.rate_limit import limiter
+from app.concurrency import shutdown_executor
 from config.logging import get_logger
 from config.settings import get_settings
 from core.exceptions import HelpDeskException
@@ -27,10 +28,16 @@ async def lifespan(app: FastAPI):
         await init_db()
         logger.info("Database initialized")
     except Exception as e:
-        logger.warning(f"DB init skipped: {e}")
+        # In production a broken DB must prevent startup (fail fast), not
+        # silently degrade to 500s at runtime.
+        if settings.is_production:
+            logger.error(f"DB init failed in production: {e}")
+            raise
+        logger.warning(f"DB init skipped (dev): {e}")
 
     yield
     await close_db()
+    shutdown_executor(wait=False)
 
 
 def create_app() -> FastAPI:
@@ -42,11 +49,30 @@ def create_app() -> FastAPI:
         lifespan=lifespan,
     )
 
+    # Security Headers Middleware
+    @app.middleware("http")
+    async def add_security_headers(request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        if settings.is_production:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+    # Safe CORS configuration
+    cors_origins = settings.CORS_ORIGINS
+    allow_credentials = True
+    if "*" in cors_origins:
+        # Wildcard cannot be used with credentials
+        allow_credentials = False
+
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
+        allow_origins=cors_origins,
+        allow_credentials=allow_credentials,
+        allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
         allow_headers=["*"],
     )
 

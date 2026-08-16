@@ -6,6 +6,7 @@ Outlook (messages via Graph search endpoint) using a client-credentials
 token obtained through MSAL (Entra ID app registration).
 """
 
+import urllib.parse
 from typing import List, Optional
 
 import httpx
@@ -27,7 +28,6 @@ class MicrosoftGraphClient:
     def __init__(self, settings=None):
         self.settings = settings or get_settings()
         self._app = None
-        self._token = None
 
     # ------------------------------------------------------------------
     # Auth
@@ -54,13 +54,12 @@ class MicrosoftGraphClient:
         )
 
     def get_access_token(self) -> Optional[str]:
-        """Obtain (and cache) an app-only access token via MSAL."""
+        """Obtain an app-only access token via MSAL (MSAL manages expiration cache)."""
         app = self._build_app()
         if app is None:
             return None
-        if self._token:
-            return self._token
         try:
+            # MSAL's acquire_token_for_client automatically handles caching and refreshing
             result = app.acquire_token_for_client(scopes=[GRAPH_SCOPE])
         except Exception as e:  # pragma: no cover - depends on MSAL internals
             logger.error(f"MSAL token acquisition failed: {e}")
@@ -70,8 +69,7 @@ class MicrosoftGraphClient:
                 f"MSAL failed: {result.get('error')} {result.get('error_description', '')[:200]}"
             )
             return None
-        self._token = result["access_token"]
-        return self._token
+        return result["access_token"]
 
     # ------------------------------------------------------------------
     # HTTP
@@ -88,7 +86,9 @@ class MicrosoftGraphClient:
         }
         timeout = httpx.Timeout(20.0, connect=10.0)
         try:
-            async with httpx.AsyncClient(timeout=timeout, verify=False) as client:
+            async with httpx.AsyncClient(
+                timeout=timeout, verify=self.settings.verify_tls
+            ) as client:
                 resp = await client.get(url, headers=headers, params=params)
                 resp.raise_for_status()
                 return resp.json()
@@ -111,19 +111,22 @@ class MicrosoftGraphClient:
         data = await self._get(f"{GRAPH_BASE}/sites", params=params)
         sites = []
         for site in data.get("value", [])[:top]:
-            name = site.get("displayName") or site.get("name") or site.get("id", "")
+            site_id = site.get("id", "")
+            name = site.get("displayName") or site.get("name") or site_id
             web_url = site.get("webUrl", "")
             # Attempt to fetch the default drive to grab a sample file
             drive_sample = ""
-            try:
-                drive = await self._get(
-                    f"{GRAPH_BASE}/sites/{site.get('id', '')}/drive/root/children",
-                    params={"$top": 3},
-                )
-                names = [item.get("name", "") for item in drive.get("value", [])]
-                drive_sample = ", ".join(names[:3]) if names else ""
-            except Exception:
-                pass
+            if site_id:
+                safe_site_id = urllib.parse.quote(str(site_id), safe="")
+                try:
+                    drive = await self._get(
+                        f"{GRAPH_BASE}/sites/{safe_site_id}/drive/root/children",
+                        params={"$top": 3},
+                    )
+                    names = [item.get("name", "") for item in drive.get("value", [])]
+                    drive_sample = ", ".join(names[:3]) if names else ""
+                except Exception:
+                    pass
             sites.append(
                 {
                     "title": name,
@@ -143,8 +146,11 @@ class MicrosoftGraphClient:
         results = []
         for chat in data.get("value", [])[:top]:
             chat_id = chat.get("id", "")
+            if not chat_id:
+                continue
+            safe_chat_id = urllib.parse.quote(str(chat_id), safe="")
             msgs = await self._get(
-                f"{GRAPH_BASE}/me/chats/{chat_id}/messages",
+                f"{GRAPH_BASE}/me/chats/{safe_chat_id}/messages",
                 params={"$top": 5},
             )
             for msg in msgs.get("value", [])[:5]:

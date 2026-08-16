@@ -60,11 +60,13 @@ ANALYTICS_EVENT = ("CHAT", "TICKET", "SLA", "RETRIEVAL", "MEMORY", "TRAINING")
 def create_db_engine():
     """Create the appropriate database engine based on URL."""
     settings = get_settings()
-    return create_async_engine(
-        settings.DATABASE_URL,
-        echo=settings.DEBUG,
-        pool_pre_ping=True,
-    )
+    kwargs: dict = {"echo": settings.DEBUG, "pool_pre_ping": True}
+    if settings.DATABASE_URL.startswith("sqlite"):
+        # Busy timeout avoids "database is locked" under concurrent writes
+        # (agent threads + API). check_same_thread=False lets sync-bridge
+        # engines reuse the same file across worker threads.
+        kwargs["connect_args"] = {"timeout": 30.0, "check_same_thread": False}
+    return create_async_engine(settings.DATABASE_URL, **kwargs)
 
 
 engine = create_db_engine()
@@ -358,6 +360,11 @@ async def init_db():
     from sqlalchemy import text
 
     async with engine.begin() as conn:
+        if engine.url.drivername.startswith("sqlite"):
+            # WAL is a persistent database-file property: enabling it here
+            # (once) makes every subsequent connection (API + sync-bridge
+            # engines) use WAL, which allows concurrent readers/writers.
+            await conn.execute(text("PRAGMA journal_mode=WAL"))
         await conn.run_sync(Base.metadata.create_all)
 
     # Verify connection

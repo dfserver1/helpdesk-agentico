@@ -116,10 +116,24 @@ Abre el navegador en **http://localhost:8501** → ya puedes usar el agente.
 
 ## 5. Paso 4 — Comprobar que funciona (fire-test)
 
+> **Importante:** la base de conocimiento (KB) arranca vacía. La respuesta con
+> **fuentes** solo aparece si la KB ya tiene documentos indexados. Dos formas
+> de cargarla antes del fire-test:
+>
+> ```bash
+> # (a) Memoria autocapacitada: enseña un caso desde UI → Self-Training
+> # (b) Script de seed de documentos (si existe para tu despliegue):
+> python scripts/seed.py
+> ```
+>
+> Mientras la KB esté vacía, el chat responderá que no encontró información y
+> propondrá abrir un ticket (flujo esperado, no un fallo).
+
 1. Inicia sesión con el admin en la UI (http://localhost:8501).
 2. En la pestaña **Chat**, escribe: *"¿Cómo restablezco una contraseña de
    Windows?"* y pulsa enviar.
-3. Deberías recibir una respuesta con **fuentes** al final.
+3. Si la KB tiene contenido, deberías recibir una respuesta con **fuentes**.
+   Si está vacía, el agente escalará a un ticket (correcto).
 4. Ve a **Self-Training → Teach the agent** y guarda un caso:
    - *Issue:* `VPN no conecta en casa`
    - *Resolution:* `Registrar el equipo en AAD y resetear credenciales`
@@ -185,6 +199,11 @@ git push -u origin main
 > La UI de producción (Streamlit) se abre añadiendo `/ui` a la misma URL
 > (opcional; puedes usarla solo en local y en producción conectar la API a
 > Copilot Studio).
+
+> **Nota:** el contenedor de Hugging Face Space ejecuta **solo la API**; la UI
+> Streamlit no se sirve en el Space. Para la UI en producción despliega el
+> `ui/` por separado (p. ej. en Streamlit Community Cloud) apuntando a la URL
+> de la API.
 
 ---
 

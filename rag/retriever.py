@@ -6,13 +6,19 @@ Based on the ensemble strategy validated in ITOps best-practice repos:
   - BM25 (keyword)  = 40% weight
   - Vector (semantic) = 60% weight
   - CrossEncoder reranks top-10 down to top-3
+
+BM25 runs on the standalone ``rank_bm25`` package (``langchain-community`` is
+sunset), and the reranker on ``sentence-transformers`` directly.
 """
 
+import re
 from pathlib import Path
 from typing import List, Optional
 
-import pandas as pd
 from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
+from pydantic import Field, PrivateAttr
+from rank_bm25 import BM25Okapi
 
 from config.settings import get_settings
 from config.logging import get_logger
@@ -20,6 +26,46 @@ from rag.embeddings import load_embeddings
 from core.exceptions import RAGError
 
 logger = get_logger("retriever")
+
+
+class _BM25Retriever(BaseRetriever):
+    """Keyword BM25 retriever built on ``rank_bm25``.
+
+    Subclasses LangChain's ``BaseRetriever`` so the classic ``EnsembleRetriever``
+    accepts it, without depending on the sunset ``langchain-community`` package.
+    """
+
+    docs: List[Document] = Field(default_factory=list)
+    k: int = 10
+    _bm25: Optional[BM25Okapi] = PrivateAttr(default=None)
+
+    def __init__(self, documents: List[Document], k: int = 10):
+        super().__init__(docs=documents, k=k)
+        tokenized = [self._tokenize(doc.page_content) for doc in documents]
+        self._bm25 = BM25Okapi(tokenized) if tokenized else None
+
+    @staticmethod
+    def _tokenize(text: str) -> List[str]:
+        return re.findall(r"\w+", text.lower())
+
+    def _get_relevant_documents(self, query: str, *, run_manager=None) -> List[Document]:
+        """Return the top-k documents for ``query`` with BM25 relevance scores."""
+        if self._bm25 is None or not self.docs:
+            return []
+        scores = self._bm25.get_scores(self._tokenize(query))
+        if len(scores) == 0:
+            return []
+        top = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[: self.k]
+        results = []
+        for i in top:
+            doc = self.docs[i]
+            results.append(
+                Document(
+                    page_content=doc.page_content,
+                    metadata={**doc.metadata, "relevance_score": float(scores[i])},
+                )
+            )
+        return results
 
 
 class EnsembleRetriever:
@@ -76,12 +122,10 @@ class EnsembleRetriever:
                 organizations.
         """
         try:
-            from langchain_community.retrievers import BM25Retriever
-            # langchain >= 1.x moved EnsembleRetriever into the classic shim
             try:
-                from langchain.retrievers import EnsembleRetriever
-            except ImportError:
                 from langchain_classic.retrievers.ensemble import EnsembleRetriever
+            except ImportError:
+                from langchain.retrievers import EnsembleRetriever
 
             self.tenant_id = tenant_id or self.tenant_id
             self._corpus_docs = corpus_docs or self._load_corpus(data_path)
@@ -102,9 +146,7 @@ class EnsembleRetriever:
 
             # BM25 retriever if we have corpus documents
             if self._corpus_docs:
-                bm25 = BM25Retriever.from_documents(
-                    self._corpus_docs, k=self.k_initial
-                )
+                bm25 = _BM25Retriever(self._corpus_docs, k=self.k_initial)
                 retrievers.insert(0, bm25)
                 weights.insert(0, self.settings.ENSEMBLE_BM25_WEIGHT)
 
@@ -127,24 +169,20 @@ class EnsembleRetriever:
 
     # --- Reranker ---------------------------------------------------------
     def _get_reranker(self):
-        """Lazy-load CrossEncoder reranker."""
+        """Lazy-load CrossEncoder reranker (standalone sentence-transformers)."""
         if self._reranker is None:
             try:
-                from langchain_community.cross_encoders import HuggingFaceCrossEncoder
-            except ImportError:
-                from langchain.embeddings import HuggingFaceEmbeddings  # noqa: F401
+                try:
+                    from langchain_classic.retrievers.document_compressors import (
+                        CrossEncoderReranker,
+                    )
+                except ImportError:
+                    from langchain.retrievers.document_compressors import (
+                        CrossEncoderReranker,
+                    )
+                from sentence_transformers import CrossEncoder
 
-            try:
-                from langchain.retrievers.document_compressors import CrossEncoderReranker
-            except ImportError:
-                from langchain_classic.retrievers.document_compressors import (
-                    CrossEncoderReranker,
-                )
-
-            try:
-                cross_encoder = HuggingFaceCrossEncoder(
-                    model_name=self.settings.RERANKER_MODEL
-                )
+                cross_encoder = CrossEncoder(self.settings.RERANKER_MODEL)
                 self._reranker = CrossEncoderReranker(
                     model=cross_encoder,
                     top_n=self.k_final,
@@ -193,18 +231,20 @@ class EnsembleRetriever:
             raise RAGError(f"Retrieval failed: {e}")
 
 
-# --- Module-level singleton ------------------------------------------------
-_retriever_instance = None
+# --- Module-level tenant-aware cache ----------------------------------------
+_retriever_instances: dict = {}
 
 
-def get_ensemble_retriever(vectorstore=None, corpus_docs=None, tenant_id=None) -> EnsembleRetriever:
-    """Get (and cache) the ensemble retriever instance."""
-    global _retriever_instance
-    if _retriever_instance is None:
+def get_ensemble_retriever(vectorstore=None, corpus_docs=None, tenant_id=1) -> EnsembleRetriever:
+    """Get (and cache) the ensemble retriever instance per tenant."""
+    global _retriever_instances
+    tid = tenant_id if tenant_id is not None else 1
+    if tid not in _retriever_instances:
         if vectorstore is None:
             # Load the default vector store and build the retriever
             from vector_db.chroma_store import get_vector_store
             vectorstore = get_vector_store()
-        _retriever_instance = EnsembleRetriever(tenant_id=tenant_id)
-        _retriever_instance.build_ensemble(vectorstore, corpus_docs)
-    return _retriever_instance
+        retriever = EnsembleRetriever(tenant_id=tid)
+        retriever.build_ensemble(vectorstore, corpus_docs)
+        _retriever_instances[tid] = retriever
+    return _retriever_instances[tid]

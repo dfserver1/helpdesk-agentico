@@ -21,7 +21,7 @@ from config.settings import get_settings
 logger = get_logger("concurrency")
 
 _executor: Optional[ThreadPoolExecutor] = None
-_agent_semaphore: Optional[asyncio.Semaphore] = None
+_loop_semaphores: dict = {}
 
 
 def get_executor() -> ThreadPoolExecutor:
@@ -39,13 +39,34 @@ def get_executor() -> ThreadPoolExecutor:
     return _executor
 
 
+def shutdown_executor(wait: bool = True) -> None:
+    """Gracefully shutdown the shared thread pool executor."""
+    global _executor, _loop_semaphores
+    if _executor is not None:
+        logger.info("Shutting down worker thread pool...")
+        try:
+            _executor.shutdown(wait=wait)
+        except Exception as e:
+            logger.warning(f"Error during thread pool shutdown: {e}")
+        _executor = None
+    _loop_semaphores.clear()
+
+
 def get_agent_semaphore() -> asyncio.Semaphore:
-    """Global semaphore limiting concurrent agent runs."""
-    global _agent_semaphore
-    if _agent_semaphore is None:
-        settings = get_settings()
-        _agent_semaphore = asyncio.Semaphore(settings.MAX_CONCURRENT_SESSIONS)
-    return _agent_semaphore
+    """Global semaphore limiting concurrent agent runs, bound to current event loop."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    settings = get_settings()
+    if loop is not None:
+        if loop not in _loop_semaphores:
+            _loop_semaphores[loop] = asyncio.Semaphore(settings.MAX_CONCURRENT_SESSIONS)
+        return _loop_semaphores[loop]
+
+    # Fallback when called without running loop
+    return asyncio.Semaphore(settings.MAX_CONCURRENT_SESSIONS)
 
 
 async def run_in_thread(fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:

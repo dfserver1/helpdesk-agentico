@@ -16,6 +16,7 @@ depend on, so switching an org to an external ITSM never changes agent code.
 """
 
 import base64
+import urllib.parse
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -89,8 +90,11 @@ class TicketBackend(ABC):
         """Open a new ticket and return its normalized record."""
 
     @abstractmethod
-    def get_ticket(self, ticket_id: str) -> Optional[TicketRecord]:
-        """Fetch a ticket by its external id; None if not found."""
+    def get_ticket(self, ticket_id: str, tenant_id: Optional[int] = None) -> Optional[TicketRecord]:
+        """Fetch a ticket by its external id; None if not found.
+        ``tenant_id`` scopes the lookup so cross-tenant reads are impossible
+        for multi-tenant backends (database). External ITSM backends record the
+        tenant on the returned record when provided."""
 
     def health(self) -> bool:
         return True
@@ -135,7 +139,7 @@ def _run_sync(factory):
 
     if "error" in exc_box:
         raise exc_box["error"]
-    return box["result"]
+    return box.get("result")
 
 
 def _new_session_maker():
@@ -159,7 +163,7 @@ class DatabaseTicketBackend(TicketBackend):
     name = "database"
 
     def _new_ticket_number(self) -> str:
-        return "TK-" + uuid.uuid4().hex[:10].upper()
+        return "TK-" + uuid.uuid4().hex[:12].upper()
 
     def create_ticket(
         self,
@@ -171,6 +175,8 @@ class DatabaseTicketBackend(TicketBackend):
         tenant_id: int = 1,
         user_id: Optional[int] = None,
     ) -> TicketRecord:
+        from sqlalchemy.exc import IntegrityError
+
         from database.models import Ticket, TicketEvent
         from sla.engine import get_sla_engine
 
@@ -180,38 +186,45 @@ class DatabaseTicketBackend(TicketBackend):
 
         engine = get_sla_engine()
         sla = engine.compute_sla(ticket_id="pending", priority=pri)
-        ticket_number = self._new_ticket_number()
 
         async def _worker():
             e, maker = _new_session_maker()
             try:
-                async with maker() as session:
-                    ticket = Ticket(
-                        ticket_number=ticket_number,
-                        tenant_id=tenant_id,
-                        user_id=user_id,
-                        title=(summary or "")[:500],
-                        description=description or summary or "",
-                        category=category,
-                        priority=pri,
-                        status="OPEN",
-                        created_by=user_id or 0,
-                        sla_due_at=sla.due_at,
-                        sla_escalation_at=sla.escalation_at,
-                    )
-                    session.add(ticket)
-                    await session.flush()
-                    session.add(
-                        TicketEvent(
-                            ticket_id=ticket.id,
-                            event_type="CREATED",
-                            actor_id=user_id or 0,
-                            payload={"priority": pri, "title": (summary or "")[:100]},
+                # Retry on the (astronomically rare) unique ticket_number
+                # collision; WAL + busy_timeout keep concurrent inserts safe.
+                for _ in range(3):
+                    ticket_number = self._new_ticket_number()
+                    async with maker() as session:
+                        ticket = Ticket(
+                            ticket_number=ticket_number,
+                            tenant_id=tenant_id,
+                            user_id=user_id,
+                            title=(summary or "")[:500],
+                            description=description or summary or "",
+                            category=category,
+                            priority=pri,
+                            status="OPEN",
+                            created_by=user_id or 0,
+                            sla_due_at=sla.due_at,
+                            sla_escalation_at=sla.escalation_at,
                         )
-                    )
-                    await session.commit()
-                    await session.refresh(ticket)
-                    return ticket
+                        session.add(ticket)
+                        try:
+                            await session.flush()
+                        except IntegrityError:
+                            continue
+                        session.add(
+                            TicketEvent(
+                                ticket_id=ticket.id,
+                                event_type="CREATED",
+                                actor_id=user_id or 0,
+                                payload={"priority": pri, "title": (summary or "")[:100]},
+                            )
+                        )
+                        await session.commit()
+                        await session.refresh(ticket)
+                        return ticket
+                raise RuntimeError("Could not allocate a unique ticket number")
             finally:
                 await e.dispose()
 
@@ -237,10 +250,10 @@ class DatabaseTicketBackend(TicketBackend):
             sla_escalation_at=ticket.sla_escalation_at,
             metadata={"source": "database", "db_id": str(ticket.id)},
         )
-        logger.info(f"Ticket {ticket_number} [{pri}] created via database backend")
+        logger.info(f"Ticket {ticket.ticket_number} [{pri}] created via database backend")
         return record
 
-    def get_ticket(self, ticket_id: str) -> Optional[TicketRecord]:
+    def get_ticket(self, ticket_id: str, tenant_id: Optional[int] = None) -> Optional[TicketRecord]:
         from sqlalchemy import select
 
         from database.models import Ticket
@@ -252,9 +265,15 @@ class DatabaseTicketBackend(TicketBackend):
             try:
                 async with maker() as session:
                     stmt = select(Ticket).where(Ticket.ticket_number == ticket_id)
-                    if ticket_id.isdigit():
-                        stmt = select(Ticket).where(Ticket.id == int(ticket_id))
-                    return (await session.execute(stmt)).scalar_one_or_none()
+                    if tenant_id is not None:
+                        stmt = stmt.where(Ticket.tenant_id == tenant_id)
+                    res = (await session.execute(stmt)).scalar_one_or_none()
+                    if res is None and ticket_id.isdigit():
+                        stmt_id = select(Ticket).where(Ticket.id == int(ticket_id))
+                        if tenant_id is not None:
+                            stmt_id = stmt_id.where(Ticket.tenant_id == tenant_id)
+                        res = (await session.execute(stmt_id)).scalar_one_or_none()
+                    return res
             finally:
                 await e.dispose()
 
@@ -317,7 +336,10 @@ class FreshserviceTicketBackend(TicketBackend):
         return "P3"
 
     def is_configured(self) -> bool:
-        return bool(self.base_url and self.api_key)
+        if not (self.base_url and self.api_key):
+            return False
+        parsed = urllib.parse.urlparse(self.base_url)
+        return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
     def health(self) -> bool:
         return self.is_configured()
@@ -377,16 +399,17 @@ class FreshserviceTicketBackend(TicketBackend):
         logger.info(f"Freshservice ticket {fresh_id} created [{pri}]")
         return record
 
-    def get_ticket(self, ticket_id: str) -> Optional[TicketRecord]:
+    def get_ticket(self, ticket_id: str, tenant_id: Optional[int] = None) -> Optional[TicketRecord]:
         import httpx
 
         ticket_id = (ticket_id or "").strip()
-        if not self.is_configured():
+        if not self.is_configured() or not ticket_id:
             return None
+        safe_ticket_id = urllib.parse.quote(ticket_id, safe="")
         headers = self._auth_header()
         try:
             resp = httpx.get(
-                f"{self.base_url}/api/v2/tickets/{ticket_id}",
+                f"{self.base_url}/api/v2/tickets/{safe_ticket_id}",
                 headers=headers,
                 timeout=15.0,
             )
@@ -406,7 +429,7 @@ class FreshserviceTicketBackend(TicketBackend):
             category=data.get("category", "Technical Support"),
             priority=self._reverse_priority(data.get("priority", "P3")),
             status=str(data.get("status", "OPEN")),
-            tenant_id=1,
+            tenant_id=tenant_id if tenant_id is not None else 1,
             assignee=None,
             created_at=self._parse_date(data.get("created_at")),
             sla_due_at=self._parse_date(data.get("due_by")),
@@ -458,7 +481,10 @@ class JiraTicketBackend(TicketBackend):
         return "P3"
 
     def is_configured(self) -> bool:
-        return bool(self.base_url and self.email and self.api_token)
+        if not (self.base_url and self.email and self.api_token):
+            return False
+        parsed = urllib.parse.urlparse(self.base_url)
+        return parsed.scheme in ("http", "https") and bool(parsed.netloc)
 
     def health(self) -> bool:
         return self.is_configured()
@@ -519,16 +545,17 @@ class JiraTicketBackend(TicketBackend):
         logger.info(f"Jira issue {key} created [{pri}]")
         return record
 
-    def get_ticket(self, ticket_id: str) -> Optional[TicketRecord]:
+    def get_ticket(self, ticket_id: str, tenant_id: Optional[int] = None) -> Optional[TicketRecord]:
         import httpx
 
         ticket_id = (ticket_id or "").strip()
-        if not self.is_configured():
+        if not self.is_configured() or not ticket_id:
             return None
+        safe_ticket_id = urllib.parse.quote(ticket_id, safe="")
         headers = self._auth_header()
         try:
             resp = httpx.get(
-                f"{self.base_url}/rest/api/2/issue/{ticket_id}",
+                f"{self.base_url}/rest/api/2/issue/{safe_ticket_id}",
                 headers=headers,
                 timeout=15.0,
             )
@@ -550,7 +577,7 @@ class JiraTicketBackend(TicketBackend):
             category=fields.get("labels", ["Technical"])[0] if fields.get("labels") else "Technical",
             priority=self._reverse_priority(fields.get("priority", {}).get("name", "Medium")),
             status=status.upper(),
-            tenant_id=1,
+            tenant_id=tenant_id if tenant_id is not None else 1,
             created_at=self._parse_date(fields.get("created")),
             sla_due_at=self._parse_date(fields.get("duedate")),
             metadata={"source": "jira", "self": str(data.get("self", ""))},
@@ -583,13 +610,21 @@ def get_ticket_backend() -> TicketBackend:
     if provider == "freshservice":
         backend = FreshserviceTicketBackend(settings)
         if backend.is_configured():
-            logger.info("Ticket backend: freshservice")
+            logger.warning(
+                "TICKET_BACKEND=freshservice: agent-created tickets go to "
+                "Freshservice and will NOT appear in GET /api/v1/tickets or "
+                "the UI (those read the local `tickets` table)."
+            )
             return backend
         logger.warning("TICKET_BACKEND=freshservice but Freshservice is not configured; using database")
     elif provider == "jira":
         backend = JiraTicketBackend(settings)
         if backend.is_configured():
-            logger.info("Ticket backend: jira")
+            logger.warning(
+                "TICKET_BACKEND=jira: agent-created tickets go to Jira and "
+                "will NOT appear in GET /api/v1/tickets or the UI (those read "
+                "the local `tickets` table)."
+            )
             return backend
         logger.warning("TICKET_BACKEND=jira but Jira is not configured; using database")
 

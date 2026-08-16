@@ -43,7 +43,7 @@ async def login(
     # Constant-time-ish guard: always run bcrypt so response timing does not
     # reveal whether the email exists (timing-based account enumeration).
     if user is None:
-        verify_password(body.password, "$2b$12$C6UzMDM.H6dfIu7nV7hHNeXm1Uo1xK9fY3oX7TzXWZx5yR0qQeO1a")
+        verify_password(body.password, DUMMY_PASSWORD_HASH)
         raise AuthenticationError("Invalid email or password")
     if not verify_password(body.password, user.hashed_password):
         raise AuthenticationError("Invalid email or password")
@@ -75,8 +75,8 @@ async def register(
 
     user = User(
         email=body.email.lower(),
-        username=body.username,
-        full_name=body.full_name,
+        username=body.username.strip(),
+        full_name=body.full_name.strip(),
         hashed_password=hash_password(body.password),
         role="user",
     )
@@ -98,7 +98,14 @@ async def refresh(
     if payload.get("type") != "refresh":
         raise AuthenticationError("Token is not a refresh token")
 
-    user_id = int(payload.get("sub", 0))
+    raw_sub = payload.get("sub")
+    if raw_sub is None:
+        raise AuthenticationError("Token subject missing")
+    try:
+        user_id = int(raw_sub)
+    except (ValueError, TypeError):
+        raise AuthenticationError("Invalid token subject")
+
     user = (
         (await session.execute(select(User).where(User.id == user_id)))
         .scalar_one_or_none()

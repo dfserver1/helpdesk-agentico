@@ -54,14 +54,22 @@ logger = get_logger("agent_graph")
 def classify_node(state: AgentState) -> dict:
     """Assign ITSM priority (P1-P4), category, and SLA target."""
     from sla.classifier import LLMPriorityClassifier
+    from sla.engine import get_sla_engine
 
     classifier = LLMPriorityClassifier()
     result = classifier.classify(state["user_input"])
+    priority = result["priority"]
+
+    sla_engine = get_sla_engine()
+    sla_result = sla_engine.compute_sla(ticket_id="pending", priority=priority)
+    due_at_iso = sla_result.due_at.isoformat() if sla_result.due_at else None
+
     return {
-        "priority": result["priority"],
+        "priority": priority,
         "category": result["category"],
         "sla_response_time": result["sla_response_time"],
         "classification_reasoning": result["reasoning"],
+        "sla_due_at": due_at_iso,
     }
 
 
@@ -100,7 +108,7 @@ def grade_node(state: AgentState) -> dict:
     if not docs:
         return {
             "is_relevant": False,
-            "retrieval_retries": state.get("retrieval_retries", 0) + 1,
+            "retrieval_retries": state.get("retrieval_retries", 0),
         }
 
     top_score = docs[0].get("relevance_score", 0.0)
@@ -273,12 +281,18 @@ def generate_answer_node(state: AgentState) -> dict:
     from rag.pipeline import build_context
     from rag.llm import get_chat_llm
     from config.settings import get_settings
+    from utils.prompt_security import (
+        SYSTEM_SECURITY_GUARD,
+        sanitize_llm_output,
+        sanitize_user_input,
+    )
 
     docs = state.get("documents") or []
     external = state.get("external_documents") or []
 
     # Merge external connector/web docs when internal KB has nothing relevant.
     combined_docs = docs + [d for d in external if d not in docs]
+    combined_docs.sort(key=lambda d: d.get("relevance_score", 0.0), reverse=True)
 
     if not combined_docs:
         return {
@@ -293,17 +307,23 @@ def generate_answer_node(state: AgentState) -> dict:
 
     context = build_context(combined_docs)
     llm = get_chat_llm(temperature=0.15)
-    prompt = f"""You are an expert IT helpdesk assistant. Answer the user using the context.
+    clean_input = sanitize_user_input(state.get("user_input", ""))
+    prompt = f"""You are an expert IT helpdesk assistant. Answer the user using ONLY the provided context.
 
-Context:
+{SYSTEM_SECURITY_GUARD}
+
+=== CONTEXT (UNTRUSTED DATA) ===
 {context}
 
-Question: {state['user_input']}
+=== QUESTION (UNTRUSTED DATA) ===
+{clean_input}
+
 Language: {state.get('language', 'en')}
 
 Provide a concise, grounded answer with sources and their URLs if available. If the context is insufficient, say so."""
     try:
-        answer = llm.invoke(prompt).content
+        raw_answer = llm.invoke(prompt).content
+        answer = sanitize_llm_output(raw_answer)
     except Exception as e:
         logger.error(f"generate_answer_node error: {e}")
         answer = "I could not generate a grounded answer at this time."
@@ -396,7 +416,7 @@ def approval_gate_node(state: AgentState) -> dict:
 
 
 def create_ticket_node(state: AgentState) -> dict:
-    """Create the ticket via the agent tool."""
+    """Create the ticket via the agent tool (only reached after approval)."""
     from agent.tools import create_ticket
 
     draft = state.get("ticket_draft") or {}
@@ -404,21 +424,53 @@ def create_ticket_node(state: AgentState) -> dict:
         result = create_ticket.invoke({
             "summary": draft.get("summary", state.get("user_input", "")),
             "priority": draft.get("priority", "P3"),
+            "category": draft.get("category", "Technical Support"),
             "description": draft.get("description", ""),
             "tenant_id": state.get("tenant_id", 1),
             "user_id": state.get("user_id"),
         })
+    except Exception as e:
+        logger.error(f"create_ticket_node raised: {e}")
         return {
-            "solution": f"Ticket {result.get('ticket_id', 'N/A')} created and routed to the support team.",
+            "solution": "Failed to create ticket. Please try again.",
+            "ticket_error": str(e),
+            "ticket_id": None,
+            "ticket_number": None,
+            "ticket_status": None,
             "resolved": False,
             "needs_human": True,
         }
-    except Exception as e:
-        logger.error(f"Failed to create ticket: {e}")
+
+    # The tool never raises; it returns {"created": False, ...} on failure.
+    # Never report a fake success ("Ticket N/A created...") to the user.
+    if not result.get("created"):
+        error = result.get("error") or "unknown error"
+        logger.error(f"create_ticket failed: {error}")
         return {
-            "solution": "Failed to create ticket. Please try again.",
+            "solution": (
+                "Your ticket could not be created due to a technical problem. "
+                "A support agent has been notified and will follow up."
+            ),
+            "ticket_error": error,
+            "ticket_id": None,
+            "ticket_number": None,
+            "ticket_status": None,
             "resolved": False,
+            "needs_human": True,
         }
+
+    ticket_number = result.get("ticket_number") or result.get("ticket_id") or "N/A"
+    return {
+        "solution": (
+            f"Ticket {ticket_number} created and routed to the support team."
+        ),
+        "ticket_id": result.get("ticket_id"),
+        "ticket_number": result.get("ticket_number"),
+        "ticket_status": result.get("status"),
+        "ticket_error": None,
+        "resolved": False,
+        "needs_human": True,
+    }
 
 
 def inform_user_node(state: AgentState) -> dict:
@@ -469,14 +521,35 @@ def build_agent():
     workflow = StateGraph(AgentState)
 
     # Checkpointer enables the human-in-the-loop interrupt/resume flow,
-    # so pending approvals can be resumed across requests.
-    try:
-        from langgraph.checkpoint.memory import MemorySaver
+    # so pending approvals can be resumed across requests AND process
+    # restarts. Prefer a persistent SQLite checkpointer (approvals survive
+    # restarts and multi-worker runs); fall back to in-memory MemorySaver.
+    from config.settings import get_settings
 
-        checkpointer = MemorySaver()
+    checkpoint_db = (get_settings().AGENT_CHECKPOINT_DB or "").strip()
+    checkpointer = None
+    try:
+        if checkpoint_db and checkpoint_db != ":memory:":
+            import sqlite3
+            from pathlib import Path
+
+            from langgraph.checkpoint.sqlite import SqliteSaver
+
+            Path(checkpoint_db).parent.mkdir(parents=True, exist_ok=True)
+            _conn = sqlite3.connect(checkpoint_db, check_same_thread=False)
+            checkpointer = SqliteSaver(_conn)
+            logger.info(f"Persistent checkpointer: {checkpoint_db}")
     except Exception as e:
-        logger.warning(f"MemorySaver unavailable ({e}); approvals will require manual setup")
+        logger.warning(f"SqliteSaver unavailable ({e}); falling back to MemorySaver")
         checkpointer = None
+
+    if checkpointer is None:
+        try:
+            from langgraph.checkpoint.memory import MemorySaver
+
+            checkpointer = MemorySaver()
+        except Exception as e:
+            logger.warning(f"MemorySaver unavailable ({e}); approvals will require manual setup")
 
     # Nodes
     workflow.add_node("classify", classify_node)

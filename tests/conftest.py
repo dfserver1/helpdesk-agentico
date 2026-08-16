@@ -17,6 +17,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///" + str(
     Path(tempfile.gettempdir()) / "hdtest_api.db"
 )
+os.environ["AGENT_CHECKPOINT_DB"] = str(
+    Path(tempfile.gettempdir()) / "hdtest_checkpoints.sqlite"
+)
 os.environ["JWT_SECRET_KEY"] = "test-secret-key-please-change-32chars-plus"
 os.environ["LOG_FORMAT"] = "json"
 os.environ["LOG_LEVEL"] = "ERROR"
@@ -24,6 +27,9 @@ os.environ["LOG_LEVEL"] = "ERROR"
 _db_path = Path(tempfile.gettempdir()) / "hdtest_api.db"
 if _db_path.exists():
     _db_path.unlink()
+_chk_path = Path(tempfile.gettempdir()) / "hdtest_checkpoints.sqlite"
+if _chk_path.exists():
+    _chk_path.unlink()
 
 from fastapi.testclient import TestClient  # noqa: E402
 

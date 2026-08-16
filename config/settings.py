@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     # --- App ---
-    APP_NAME: str = "HelpDesk Enterprise Copilot"
+    APP_NAME: str = "HelpDesk Enterprise"
     APP_VERSION: str = "12.0.0"
     DEBUG: bool = False
     ENVIRONMENT: str = "development"
@@ -68,22 +68,19 @@ class Settings(BaseSettings):
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
 
     # --- Entra ID (Azure AD) ---
-    ENTRA_ID_TENANT_ID: str = ""
-    ENTRA_ID_CLIENT_ID: str = ""
-    ENTRA_ID_CLIENT_SECRET: str = ""
-    ENTRA_ID_AUTHORITY: str = ""
-    ENTRA_ID_SCOPE: str = "https://graph.microsoft.com/.default"
+    # NOTE: Microsoft Graph access is configured via the O365 connector block
+    # below (GRAPH_TENANT_ID / GRAPH_CLIENT_ID / GRAPH_CLIENT_SECRET). The
+    # legacy ENTRA_ID_* variables are no longer used and were removed.
 
     # --- Database ---
     DATABASE_URL: str = "sqlite+aiosqlite:///./helpdesk.db"
+    # Persistent LangGraph checkpointer (SQLite file). Pending ticket
+    # approvals survive process restarts. ":memory:" uses MemorySaver.
+    AGENT_CHECKPOINT_DB: str = "./data/checkpoints.sqlite"
 
     # --- ChromaDB ---
     CHROMA_PERSIST_DIR: str = "./data/chroma_store"
     CHROMA_COLLECTION_NAME: str = "helpdesk_docs"
-    CHROMA_DISTANCE_FUNCTION: str = "cosine"
-
-    # --- FAISS ---
-    FAISS_INDEX_PATH: str = "./data/faiss_index"
 
     # --- FastAPI ---
     API_HOST: str = "0.0.0.0"
@@ -120,12 +117,22 @@ class Settings(BaseSettings):
     ENSEMBLE_VECTOR_WEIGHT: float = 0.6
     SIMILARITY_THRESHOLD: float = 0.25
 
-    # --- SLA Settings ---
+    # --- SLA Settings (aligned with 11-SLA/PriorityMatrix.md) ---
+    # Response target (first reply) per priority.
     SLA_P1_RESPONSE_MINUTES: int = 0
     SLA_P2_RESPONSE_HOURS: int = 4
     SLA_P3_RESPONSE_HOURS: int = 24
     SLA_P4_RESPONSE_HOURS: int = 72
-    SLA_ESCALATION_MULTIPLIER: float = 2.0
+    # Resolution SLA (business hours until due) per priority.
+    SLA_P1_RESOLVE_HOURS: int = 4
+    SLA_P2_RESOLVE_HOURS: int = 8
+    SLA_P3_RESOLVE_HOURS: int = 48
+    SLA_P4_RESOLVE_HOURS: int = 168
+    # Escalation delay (calendar minutes) per priority.
+    SLA_P1_ESCALATION_MINUTES: int = 15
+    SLA_P2_ESCALATION_MINUTES: int = 60
+    SLA_P3_ESCALATION_MINUTES: int = 240
+    SLA_P4_ESCALATION_MINUTES: int = 1440
     SLA_BUSINESS_HOURS_START: int = 9
     SLA_BUSINESS_HOURS_END: int = 18
     SLA_TIMEZONE: str = "UTC"
@@ -154,14 +161,9 @@ class Settings(BaseSettings):
     LANGFUSE_SECRET_KEY: str = ""
     LANGFUSE_HOST: str = "https://cloud.langfuse.com"
 
-    # --- Celery / Redis ---
-    CELERY_BROKER_URL: str = "redis://localhost:6379/0"
-    CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
-
     # --- Memory / Self-Training ---
-    MEMORY_STORE_TYPE: str = "postgresql"
-    MEMORY_MAX_HISTORY: int = 50
-    MEMORY_EMBEDDING_DIMENSIONS: int = 3072
+    # NOTE: memory persists in the application DB (see MEMORY_* / CELERY_* /
+    # redis flags were dead config and are removed).
     SELF_TRAINING_ENABLED: bool = True
     SELF_TRAINING_BATCH_SIZE: int = 100
     SELF_TRAINING_MIN_CONFIDENCE: float = 0.8
@@ -183,6 +185,15 @@ class Settings(BaseSettings):
     TEAMS_ENABLED: bool = True
     OUTLOOK_ENABLED: bool = True
     CONNECTOR_MAX_RESULTS: int = 8
+
+    # --- Google Workspace Connectors (Drive, Gmail, Docs) ---
+    GOOGLE_CONNECTORS_ENABLED: bool = False
+    GOOGLE_SERVICE_ACCOUNT_FILE: str = ""
+    GOOGLE_SERVICE_ACCOUNT_JSON: str = ""
+    GOOGLE_ADMIN_DELEGATE_EMAIL: str = ""
+    GOOGLE_DRIVE_ENABLED: bool = True
+    GOOGLE_GMAIL_ENABLED: bool = True
+    GOOGLE_DOCS_ENABLED: bool = True
 
     # --- Ticket backend (ITSM integration) ---
     # database | freshservice
@@ -225,13 +236,10 @@ class Settings(BaseSettings):
         return self.ENVIRONMENT.lower() == "development"
 
     @property
-    def sla_response_times(self) -> dict:
-        return {
-            "P1": self.SLA_P1_RESPONSE_MINUTES * 60,
-            "P2": self.SLA_P2_RESPONSE_HOURS * 3600,
-            "P3": self.SLA_P3_RESPONSE_HOURS * 3600,
-            "P4": self.SLA_P4_RESPONSE_HOURS * 3600,
-        }
+    def verify_tls(self) -> bool:
+        """Whether outbound httpx calls verify TLS certificates. Defaults to
+        True; disable only for testing against self-signed certs."""
+        return not self.SKIP_PROVIDER_CERT_VALIDATION
 
     @property
     def ensemble_weights(self) -> list:

@@ -97,10 +97,12 @@ async def set_user_role(
         raise ValidationError(f"User {user_id} not found")
 
     tenant = admin.organization_id or 1
-    if (user.organization_id or 1) != tenant:
+    if (user.organization_id or 1) != tenant and not admin.is_superuser:
         raise ValidationError("Cannot modify a user from another tenant")
     if user.id == admin.id:
         raise ValidationError("An admin cannot change their own role")
+    if user.is_superuser and not admin.is_superuser:
+        raise ValidationError("Cannot modify a superuser account")
 
     user.role = role
     await db.commit()
