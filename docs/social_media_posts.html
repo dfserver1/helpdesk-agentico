@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kit de Publicaciones para Redes Sociales — HelpDesk Enterprise</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --primary: #0a66c2;
+    --primary-dark: #004182;
+    --fb-color: #1877f2;
+    --bg-dark: #0f172a;
+    --card-bg: #1e293b;
+    --text-light: #f8fafc;
+    --text-muted: #94a3b8;
+    --accent-cyan: #38bdf8;
+    --accent-emerald: #10b981;
+  }
+  
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: #090d16;
+    color: #e2e8f0;
+    margin: 0;
+    padding: 30px 20px;
+    line-height: 1.6;
+  }
+
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+  }
+
+  .header {
+    text-align: center;
+    margin-bottom: 40px;
+  }
+
+  .badge {
+    display: inline-block;
+    background: rgba(56, 189, 248, 0.15);
+    color: var(--accent-cyan);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 6px 16px;
+    border-radius: 9999px;
+    border: 1px solid rgba(56, 189, 248, 0.3);
+    margin-bottom: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  h1 {
+    font-size: 32px;
+    font-weight: 800;
+    color: #ffffff;
+    margin: 0 0 10px;
+    background: linear-gradient(135deg, #ffffff 0%, #94a3b8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    color: var(--text-muted);
+    font-size: 16px;
+    max-width: 650px;
+    margin: 0 auto;
+  }
+
+  .tab-buttons {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    justify-content: center;
+  }
+
+  .tab-btn {
+    background: #1e293b;
+    border: 1px solid #334155;
+    color: #cbd5e1;
+    padding: 12px 24px;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .tab-btn.active-li {
+    background: #0a66c2;
+    border-color: #0a66c2;
+    color: #ffffff;
+    box-shadow: 0 4px 15px rgba(10, 102, 194, 0.3);
+  }
+
+  .tab-btn.active-fb {
+    background: #1877f2;
+    border-color: #1877f2;
+    color: #ffffff;
+    box-shadow: 0 4px 15px rgba(24, 119, 242, 0.3);
+  }
+
+  .card {
+    background: #131d2e;
+    border: 1px solid #1e293b;
+    border-radius: 16px;
+    padding: 30px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    margin-bottom: 30px;
+  }
+
+  .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #1e293b;
+  }
+
+  .platform-tag {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 17px;
+  }
+
+  .platform-tag.li { color: #38bdf8; }
+  .platform-tag.fb { color: #60a5fa; }
+
+  .copy-btn {
+    background: #1e293b;
+    border: 1px solid #38bdf8;
+    color: #38bdf8;
+    padding: 8px 18px;
+    border-radius: 8px;
+    font-weight: 600;
+    font-size: 13.5px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .copy-btn:hover {
+    background: #38bdf8;
+    color: #090d16;
+  }
+
+  .post-content {
+    background: #0b111c;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 24px;
+    font-size: 15px;
+    line-height: 1.7;
+    color: #e2e8f0;
+    white-space: pre-wrap;
+    font-family: inherit;
+    user-select: text;
+  }
+
+  .highlight-box {
+    margin-top: 20px;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 10px;
+    padding: 16px 20px;
+    color: #6ee7b7;
+    font-size: 14px;
+  }
+
+  .tips {
+    margin-top: 15px;
+    font-size: 13.5px;
+    color: #94a3b8;
+    background: #0f172a;
+    border-radius: 8px;
+    padding: 12px 16px;
+  }
+
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div class="badge">Open Source Release</div>
+    <h1>🚀 Lanzamiento: HelpDesk Enterprise</h1>
+    <p class="subtitle">Publicaciones de alto impacto diseñadas para LinkedIn y Grupos de Facebook/Comunidades de IA, Desarrollo y Soporte TI.</p>
+  </div>
+
+  <div class="tab-buttons">
+    <button class="tab-btn active-li" id="btn-li" onclick="showTab('li')">
+      💼 Post para LinkedIn
+    </button>
+    <button class="tab-btn" id="btn-fb" onclick="showTab('fb')">
+      👥 Post para Grupos de Facebook & Comunidades
+    </button>
+  </div>
+
+  <!-- TAB LINKEDIN -->
+  <div class="card" id="card-li">
+    <div class="card-header">
+      <div class="platform-tag li">
+        <span>💼</span> Versión Optimizada para LinkedIn
+      </div>
+      <button class="copy-btn" onclick="copyText('post-li-text')">📋 Copiar Post</button>
+    </div>
+    
+    <div class="post-content" id="post-li-text">🚀 ¡He liberado como CÓDIGO ABIERTO **HelpDesk Enterprise**: El Agente de IA para Soporte TI con Memoria Autocapacitada y Conectores Empresariales! 🤖⚡
+
+En el mundo corporativo, la mayoría de herramientas de soporte fallan en lo mismo: responden con documentación genérica y NUNCA aprenden de sus propios casos resueltos.
+
+Por eso construí y optimicé **HelpDesk Enterprise**, un sistema integral de IA de nivel productivo, multi-tenant y con arquitectura LangGraph que evoluciona con cada incidente.
+
+🧠 ¿Qué hace único a HelpDesk Enterprise?
+━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔹 𝗥𝗔𝗚 𝗛í𝗯𝗿𝗶𝗱𝗼 𝗱𝗲 𝗔𝗹𝘁𝗮 𝗣𝗿𝗲𝗰𝗶𝘀𝗶ó𝗻: BM25 léxico + Embeddings vectoriales (ChromaDB) + Reranking con Cross-Encoder para cero alucinaciones.
+🔹 𝗠𝗲𝗺𝗼𝗿𝗶𝗮 𝗔𝘂𝘁𝗼𝗰𝗮𝗽𝗮𝗰𝗶𝘁𝗮𝗱𝗮 (𝗦𝗲𝗹𝗳-𝗧𝗿𝗮𝗶𝗻𝗶𝗻𝗴): Aprende autónomamente de cada ticket resuelto y feedback de usuarios para resolver problemas futuros al instante.
+🔹 𝗖𝗼𝗻𝗲𝗰𝘁𝗼𝗿𝗲𝘀 𝗘𝗺𝗽𝗿𝗲𝘀𝗮𝗿𝗶𝗮𝗹𝗲𝘀 𝗗𝘂𝗮𝗹𝗲𝘀:
+   • 𝗠𝗶𝗰𝗿𝗼𝘀𝗼𝗳𝘁 𝟯𝟲𝟱: SharePoint, Teams y Outlook (Microsoft Graph).
+   • 𝗚𝗼𝗼𝗴𝗹𝗲 𝗪𝗼𝗿𝗸𝘀𝗽𝗮𝗰𝗲: Google Drive, Docs y Gmail.
+   • Autoentrenamiento con un clic extrayendo conocimiento de repositorios corporativos.
+🔹 𝗠𝗼𝘁𝗼𝗿 𝗜𝗧𝗦𝗠 & 𝗦𝗟𝗔𝘀: Clasificación automática de prioridad P1–P4, tiempos de vencimiento en horario laboral y escalado ITIL.
+🔹 𝗛𝘂𝗺𝗮𝗻-𝗶𝗻-𝘁𝗵𝗲-𝗟𝗼𝗼𝗽: Flujo de aprobación interactiva para creación y validación de tickets.
+🔹 𝗣𝗲𝗿𝘀𝗶𝘀𝘁𝗲𝗻𝗰𝗶𝗮 𝗱𝗲 𝗖𝗼𝗻𝘃𝗲𝗿𝘀𝗮𝗰𝗶𝗼𝗻𝗲𝘀: Espacios de trabajo multisesión con recuperación instantánea de chats y contexto.
+🔹 𝗦𝗲𝗴𝘂𝗿𝗶𝗱𝗮𝗱 𝗕𝗹𝗶𝗻𝗱𝗮𝗱𝗮: Protección contra Prompt Injection, indirect injection, mitigación IDOR/SSRF y JWT con RBAC.
+
+⚙️ Stack Tecnológico:
+Python 3.10+ · FastAPI · LangGraph · ChromaDB · Streamlit UI · Google Gemini / Azure OpenAI · Docker & Docker Compose.
+
+💸 ¿Costo de infraestructura?
+¡CERO! Funciona con el nivel gratuito de Google Gemini (LLM + Embeddings) y está listo para desplegarse con un solo comando:
+`docker compose up --build -d`
+
+📂 Repositorio en GitHub (100% Abierto y Gratuito con licencia MIT):
+👉 https://github.com/dfserver1/helpdesk-agentico.git
+
+⭐ Si te parece útil o te aporta valor en tus proyectos de IA, apóyame con una estrella en GitHub y comparte para que más profesionales y pequeñas empresas puedan implementar soporte de TI inteligente sin pagar miles de dólares en licencias.
+
+¡Me encantaría leer tus comentarios y sugerencias para seguir mejorándolo juntos! 👇
+
+#InteligenciaArtificial #AI #HelpDesk #OpenSource #LangGraph #FastAPI #Python #RAG #MachineLearning #ITSM #GoogleWorkspace #Microsoft365 #DevOps #Innovation</div>
+
+    <div class="highlight-box">
+      💡 <b>Tip de Publicación:</b> Acompaña esta publicación adjuntando el nuevo logotipo oficial (<code>ui/logo.png</code>) o un video corto/screenshot de la interfaz de Streamlit para multiplicar el alcance y engagement orgánico en el feed.
+    </div>
+  </div>
+
+  <!-- TAB FACEBOOK -->
+  <div class="card hidden" id="card-fb">
+    <div class="card-header">
+      <div class="platform-tag fb">
+        <span>👥</span> Versión Optimizada para Grupos de Facebook / Comunidades
+      </div>
+      <button class="copy-btn" onclick="copyText('post-fb-text')">📋 Copiar Post</button>
+    </div>
+    
+    <div class="post-content" id="post-fb-text">🔥 ¡Hola comunidad! Les comparto un proyecto Open Source que acabo de actualizar y optimizar al 100%: **HelpDesk Enterprise** 🤖🛠️
+
+Es una plataforma completa de HelpDesk con IA diseñada para departamentos de TI, empresas y desarrolladores que quieren implementar un soporte técnico inteligente SIN pagar licencias carísimas.
+
+👉 Repositorio libre en GitHub:
+https://github.com/dfserver1/helpdesk-agentico.git
+
+✨ Lo más potente que incluye:
+━━━━━━━━━━━━━━━━━━━━
+✅ Memoria Autocapacitada: El agente aprende de cada caso que resuelve y feedback para no volver a fallar en problemas repetitivos.
+✅ Conexión con Google Workspace & Office 365: Busca y se autoentrena directamente con manuales y correos de Google Drive, Gmail, SharePoint, Teams y Outlook.
+✅ RAG Híbrido Avanzado: Combina búsqueda vectorial + BM25 + Reranker para respuestas precisas y sin inventar información.
+✅ Gestión de Tickets & SLAs (P1 a P4): Calcula tiempos de vencimiento, horarios laborales y pide aprobación humana antes de abrir un ticket.
+✅ Recuperación de Sesiones: Historial de chats guardado por usuario para retomar conversaciones anteriores cuando quieras.
+✅ Seguridad Endurecida: Blindado contra Prompt Injection, ataques IDOR y brechas de seguridad comunes.
+✅ 100% Dockerizado: Lo levantas en segundos con `docker compose up --build -d`.
+
+Totalmente GRATIS con licencia MIT y funciona perfecto con Google Gemini Free o Azure OpenAI.
+
+Espero les sea de mucha ayuda para sus empresas o para aprender arquitectura avanzada de Agentes con LangGraph y FastAPI.
+
+⭐ Si les sirve, les agradecería muchísimo una estrellita (Star) en GitHub y que me ayuden compartiendo para que llegue a más gente. ¡Cualquier duda o feedback los leo en los comentarios! 🙌</div>
+
+    <div class="highlight-box">
+      💡 <b>Recomendación para Grupos:</b> Publica en grupos de Python, Inteligencia Artificial, Soporte TI / SysAdmins, DevOps y Startups. El tono es colaborativo y fomenta la interacción comunitaria.
+    </div>
+  </div>
+</div>
+
+<script>
+function showTab(platform) {
+  const cardLi = document.getElementById('card-li');
+  const cardFb = document.getElementById('card-fb');
+  const btnLi = document.getElementById('btn-li');
+  const btnFb = document.getElementById('btn-fb');
+
+  if (platform === 'li') {
+    cardLi.classList.remove('hidden');
+    cardFb.classList.add('hidden');
+    btnLi.className = 'tab-btn active-li';
+    btnFb.className = 'tab-btn';
+  } else {
+    cardLi.classList.add('hidden');
+    cardFb.classList.remove('hidden');
+    btnLi.className = 'tab-btn';
+    btnFb.className = 'tab-btn active-fb';
+  }
+}
+
+function copyText(elementId) {
+  const text = document.getElementById(elementId).innerText;
+  navigator.clipboard.writeText(text).then(() => {
+    alert('✅ ¡Texto copiado al portapapeles con éxito!');
+  }).catch(err => {
+    console.error('Error al copiar: ', err);
+  });
+}
+</script>
+
+</body>
+</html>
